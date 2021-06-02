@@ -1,9 +1,9 @@
-name: 'PROD Docker Image'
+name: 'DEV Docker Image'
 
 on:
   push:
     branches:
-      - master
+      - dev
   workflow_dispatch:
 
 jobs:
