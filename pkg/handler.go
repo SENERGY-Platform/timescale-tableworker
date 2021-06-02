@@ -121,7 +121,7 @@ func (handler *Handler) createTables(d device) error {
 		if err != nil {
 			return err
 		}
-		table := "device:" + shortDeviceId + "." + "service:" + shortServiceId
+		table := "device:" + shortDeviceId + "_" + "service:" + shortServiceId
 		query := "CREATE TABLE IF NOT EXISTS \"" + table + "\" (time TIMESTAMP NOT NULL,"
 		if len(service.Outputs) == 0 {
 			continue
