@@ -1,0 +1,19 @@
+{
+  "KafkaBootstrap": "localhost:9092",
+  "KafkaTopic": "devices",
+  "KafkaOffset": "earliest",
+  "KafkaGroupId": "timescale-tableworker",
+  "KafkaCommitMessages": true,
+
+  "PostgresHost": "localhost",
+  "PostgresPort": 5432,
+  "PostgresUser": "postgres",
+  "PostgresPw": "secret",
+  "PostgresDb": "timescale",
+
+  "HypertableReplicationFactor": 2,
+
+  "DeviceManagerUrl": "http://device-manager:8080",
+
+  "Debug": false
+}

@@ -35,5 +35,5 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            smartenergyplatform/timescale-dbworker:dev
-            ghcr.io/senergy-platform/timescale-dbworker:dev
+            smartenergyplatform/timescale-tableworker:dev
+            ghcr.io/senergy-platform/timescale-tableworker:dev
