@@ -157,7 +157,7 @@ func (handler *Handler) createTables(d device) error {
 		if handler.distributed {
 			query += "distributed_"
 		}
-		query += "hypertable('\" + table + \"','time');"
+		query += "hypertable('\"" + table + "\"','time');"
 		if handler.debug {
 			log.Println("Executing:", query)
 		}
