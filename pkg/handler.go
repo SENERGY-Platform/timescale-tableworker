@@ -71,6 +71,12 @@ func NewHandler(c Config, wg *sync.WaitGroup, ctx context.Context) (handler *Han
 		return nil, err
 	}
 
+	err = db.Ping()
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
 	wg.Add(1)
 	go func() {
 		<-ctx.Done()
