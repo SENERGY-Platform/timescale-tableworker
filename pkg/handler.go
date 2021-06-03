@@ -130,9 +130,9 @@ func (handler *Handler) createTables(d device) error {
 			return err
 		}
 		table := "device:" + shortDeviceId + "_" + "service:" + shortServiceId
-		query := "CREATE TABLE IF NOT EXISTS \"" + table + "\" (time TIMESTAMP NOT NULL,"
-		if len(service.Outputs) == 0 {
-			continue
+		query := "CREATE TABLE IF NOT EXISTS \"" + table + "\" (time TIMESTAMP NOT NULL"
+		if len(service.Outputs) > 0 {
+			query += ","
 		}
 		for _, output := range service.Outputs {
 			query += strings.Join(parseContentVariable(output.ContentVariable, ""), ",")
