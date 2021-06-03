@@ -34,6 +34,7 @@ import (
 
 type Handler struct {
 	db               *sql.DB
+	distributed      bool
 	replication      string
 	deviceManagerUrl string
 	debug            bool
@@ -85,6 +86,7 @@ func NewHandler(c Config, wg *sync.WaitGroup, ctx context.Context) (handler *Han
 	}()
 	return &Handler{
 		db:               db,
+		distributed:      c.UseDistributedHypertables,
 		replication:      strconv.Itoa(c.HypertableReplicationFactor),
 		deviceManagerUrl: c.DeviceManagerUrl,
 		debug:            c.Debug,
@@ -151,7 +153,11 @@ func (handler *Handler) createTables(d device) error {
 			cancel()
 			return err
 		}
-		query = "SELECT create_distributed_hypertable('\"" + table + "\"','time');"
+		query = "SELECT create_"
+		if handler.distributed {
+			query += "distributed_"
+		}
+		query += "hypertable('\" + table + \"','time');"
 		if handler.debug {
 			log.Println("Executing:", query)
 		}
@@ -161,15 +167,17 @@ func (handler *Handler) createTables(d device) error {
 			cancel()
 			return err
 		}
-		query = "SELECT  set_replication_factor('\"" + table + "\"', " + handler.replication + ");"
-		if handler.debug {
-			log.Println("Executing:", query)
-		}
-		_, err = tx.Exec(query)
-		if err != nil {
-			_ = tx.Rollback()
-			cancel()
-			return err
+		if handler.distributed {
+			query = "SELECT set_replication_factor('\"" + table + "\"', " + handler.replication + ");"
+			if handler.debug {
+				log.Println("Executing:", query)
+			}
+			_, err = tx.Exec(query)
+			if err != nil {
+				_ = tx.Rollback()
+				cancel()
+				return err
+			}
 		}
 		err = tx.Commit()
 		if err != nil {

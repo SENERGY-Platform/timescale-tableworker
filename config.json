@@ -11,6 +11,7 @@
   "PostgresPw": "secret",
   "PostgresDb": "timescale",
 
+  "UseDistributedHypertables": true,
   "HypertableReplicationFactor": 2,
 
   "DeviceManagerUrl": "http://device-manager:8080",

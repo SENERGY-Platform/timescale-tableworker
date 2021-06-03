@@ -39,6 +39,7 @@ type Config struct {
 	PostgresPw   string `json:"PostgresPw"`
 	PostgresDb   string `json:"PostgresDb"`
 
+	UseDistributedHypertables   bool
 	HypertableReplicationFactor int `json:"HypertableReplicationFactor"`
 
 	DeviceManagerUrl string `json:"DeviceManagerUrl"`
