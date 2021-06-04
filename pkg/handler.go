@@ -257,7 +257,7 @@ func parseContentVariable(c devicetypes.ContentVariable, path string) []string {
 	case devicetypes.Float:
 		s = append(s, "\""+prefix+"\" double PRECISION NULL")
 	case devicetypes.Integer:
-		s = append(s, "\""+prefix+"\" int NULL")
+		s = append(s, "\""+prefix+"\" bigint NULL")
 	case devicetypes.Structure:
 		for _, sub := range c.SubContentVariables {
 			s = append(s, parseContentVariable(sub, prefix)...)
