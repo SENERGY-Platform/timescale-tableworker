@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
 	"log"
 	"os"
 	"os/signal"
@@ -31,14 +32,14 @@ func main() {
 	configLocation := flag.String("config", "config.json", "configuration file")
 	flag.Parse()
 
-	config, err := pkg.LoadConfig(*configLocation)
+	conf, err := config.LoadConfig(*configLocation)
 	if err != nil {
-		log.Fatal("ERROR: unable to load config ", err)
+		log.Fatal("ERROR: unable to load conf ", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	wg, err := pkg.Start(ctx, config)
+	wg, err := pkg.Start(ctx, conf)
 	if err != nil {
 		log.Fatal(err)
 	}

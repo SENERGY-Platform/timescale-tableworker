@@ -1,6 +1,7 @@
 {
   "KafkaBootstrap": "localhost:9092",
-  "KafkaTopic": "devices",
+  "KafkaTopicDevices": "devices",
+  "KafkaTopicDeviceTypes": "device-types",
   "KafkaOffset": "earliest",
   "KafkaGroupId": "timescale-tableworker",
   "KafkaCommitMessages": true,
@@ -10,6 +11,7 @@
   "PostgresUser": "postgres",
   "PostgresPw": "secret",
   "PostgresDb": "timescale",
+  "PostgresTableworkerSchema": "tableworker",
 
   "UseDistributedHypertables": true,
   "HypertableReplicationFactor": 2,

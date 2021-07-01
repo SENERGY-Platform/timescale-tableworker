@@ -16,6 +16,20 @@
 
 package devicetypes
 
+type DeviceTypeCommand struct {
+	Command    Command    `json:"command"`
+	Id         string     `json:"id"`
+	Owner      string     `json:"owner"`
+	DeviceType DeviceType `json:"device_type"`
+}
+
+type Command string
+
+const (
+	PutCommand    Command = "PUT"
+	DeleteCommand Command = "DELETE"
+)
+
 type DeviceType struct {
 	Id            string    `json:"id"`
 	Name          string    `json:"name"`

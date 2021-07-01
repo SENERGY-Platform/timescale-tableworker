@@ -6,8 +6,8 @@ import (
 	"strings"
 )
 
-func ShortenId(uuid string) (string, error) {
-	parts := strings.Split(uuid, ":")
+func ShortenId(longId string) (string, error) {
+	parts := strings.Split(longId, ":")
 	noPrefix := parts[len(parts)-1]
 	noPrefix = strings.ReplaceAll(noPrefix, "-", "")
 	bytes, err := hex.DecodeString(noPrefix)

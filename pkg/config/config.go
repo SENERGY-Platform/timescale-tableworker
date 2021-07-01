@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package pkg
+package config
 
 import (
 	"encoding/json"
@@ -27,17 +27,19 @@ import (
 )
 
 type Config struct {
-	KafkaBootstrap      string
-	KafkaTopic          string
-	KafkaOffset         string
-	KafkaGroupId        string
-	KafkaCommitMessages bool
+	KafkaBootstrap        string
+	KafkaTopicDevices     string
+	KafkaTopicDeviceTypes string
+	KafkaOffset           string
+	KafkaGroupId          string
+	KafkaCommitMessages   bool
 
-	PostgresHost string `json:"PostgresHost"`
-	PostgresPort int    `json:"PostgresPort"`
-	PostgresUser string `json:"PostgresUser"`
-	PostgresPw   string `json:"PostgresPw"`
-	PostgresDb   string `json:"PostgresDb"`
+	PostgresHost              string `json:"PostgresHost"`
+	PostgresPort              int    `json:"PostgresPort"`
+	PostgresUser              string `json:"PostgresUser"`
+	PostgresPw                string `json:"PostgresPw"`
+	PostgresDb                string `json:"PostgresDb"`
+	PostgresTableworkerSchema string `json:"PostgresTableworkerSchema"`
 
 	UseDistributedHypertables   bool
 	HypertableReplicationFactor int `json:"HypertableReplicationFactor"`

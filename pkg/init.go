@@ -18,23 +18,25 @@ package pkg
 
 import (
 	"context"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/handler"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/kafka"
 	"log"
 	"runtime/debug"
 	"sync"
 )
 
-func Start(ctx context.Context, config Config) (wg *sync.WaitGroup, err error) {
+func Start(ctx context.Context, conf config.Config) (wg *sync.WaitGroup, err error) {
 	wg = &sync.WaitGroup{}
 
-	handler, err := NewHandler(config, wg, ctx)
+	myHandler, err := handler.NewHandler(conf, wg, ctx)
 	if err != nil {
 		debug.PrintStack()
 		return wg, err
 	}
 
 	var offset int64
-	switch config.KafkaOffset {
+	switch conf.KafkaOffset {
 	case "latest", "largest":
 		offset = kafka.Latest
 		break
@@ -45,7 +47,7 @@ func Start(ctx context.Context, config Config) (wg *sync.WaitGroup, err error) {
 		log.Println("WARN: Unknown kafka offset. Use 'latest/largest' or 'earliest/smallest'. Using latest")
 		offset = kafka.Latest
 	}
-	_, err = kafka.NewConsumer(ctx, wg, config.KafkaBootstrap, []string{config.KafkaTopic}, config.KafkaGroupId, offset, handler.handleMessage, handleError, config.Debug, config.KafkaCommitMessages)
+	_, err = kafka.NewConsumer(ctx, wg, conf.KafkaBootstrap, []string{conf.KafkaTopicDevices, conf.KafkaTopicDeviceTypes}, conf.KafkaGroupId, offset, myHandler.HandleMessage, handler.HandleError, conf.Debug, conf.KafkaCommitMessages)
 	if err != nil {
 		log.Fatal("ERROR: unable to start kafka connection ", err)
 		return wg, err
