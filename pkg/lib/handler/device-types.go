@@ -50,7 +50,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			if handler.debug {
 				log.Println("Already processed newer version, skipping update...")
 			}
-			return nil
+			continue
 		}
 		newHash := hashServiceOutputs(service)
 		if handler.debug {
@@ -60,7 +60,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			if handler.debug {
 				log.Println("No relevant changes, skipping update...")
 			}
-			return nil
+			continue
 		}
 		outdatedDeviceIds, err := handler.getOutdatedDeviceIds(dt.Id, t)
 		if err != nil {
