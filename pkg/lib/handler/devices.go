@@ -116,6 +116,16 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 		cancel()
 		return err
 	}
+	err = tx.Commit()
+	if err != nil {
+		cancel()
+		return err
+	}
+	tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		cancel()
+		return err
+	}
 	query = "SELECT create_"
 	if handler.distributed {
 		query += "distributed_"
@@ -127,6 +137,21 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 	_, err = tx.Exec(query)
 	if err != nil {
 		_ = tx.Rollback()
+		if err.Error() == "pq: table \""+table+"\" is already a hypertable" {
+			log.Println("INFO: " + err.Error())
+		} else {
+			cancel()
+			return err
+		}
+	} else {
+		err = tx.Commit()
+		if err != nil {
+			cancel()
+			return err
+		}
+	}
+	tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
 		cancel()
 		return err
 	}
