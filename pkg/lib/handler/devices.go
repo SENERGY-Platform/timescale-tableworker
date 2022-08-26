@@ -52,6 +52,8 @@ func (handler *Handler) handleDeviceMessage(msg []byte, t time.Time) error {
 		return handler.createDevice(cmd.Device, t)
 	case devicetypes.DeleteCommand:
 		return handler.deleteDevice(cmd.Id)
+	case devicetypes.RightsCommand:
+		return nil
 	default:
 		return errors.New("unknown command (ignored): " + string(cmd.Command))
 	}

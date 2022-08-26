@@ -35,6 +35,8 @@ func (handler *Handler) handleDeviceTypeMessage(msg []byte, t time.Time) error {
 		return handler.handleDeviceTypeUpdate(cmd.DeviceType, t)
 	case devicetypes.DeleteCommand:
 		return nil // device types can only be deleted if all devices are deleted first
+	case devicetypes.RightsCommand:
+		return nil
 	default:
 		return errors.New("unknown command (ignored): " + string(cmd.Command))
 	}

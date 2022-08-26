@@ -28,6 +28,7 @@ type Command string
 const (
 	PutCommand    Command = "PUT"
 	DeleteCommand Command = "DELETE"
+	RightsCommand Command = "RIGHTS"
 )
 
 type DeviceType struct {
