@@ -95,7 +95,7 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 		return err
 	}
 	table := "device:" + shortDeviceId + "_" + "service:" + shortServiceId
-	query := "CREATE TABLE IF NOT EXISTS \"" + table + "\" (time TIMESTAMP NOT NULL"
+	query := "CREATE TABLE IF NOT EXISTS \"" + table + "\" (time TIMESTAMPTZ NOT NULL"
 	if len(service.Outputs) > 0 {
 		query += ","
 	}
