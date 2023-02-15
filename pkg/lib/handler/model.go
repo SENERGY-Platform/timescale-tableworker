@@ -17,6 +17,6 @@
 package handler
 
 type TableEditMessage struct {
-	Method string `json:"method"` // "put" or "delete"
-	Tables []string
+	Method string   `json:"method"` // "put" or "delete"
+	Tables []string `json:"tables"`
 }
