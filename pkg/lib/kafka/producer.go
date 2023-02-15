@@ -18,7 +18,6 @@ package kafka
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
 	"github.com/Shopify/sarama"
 	"runtime/debug"
@@ -67,15 +66,10 @@ func (producer *Producer) Publish(topic string, msg string) error {
 			return err
 		}
 	}
-	message, err := json.Marshal(msg)
-	if err != nil {
-		debug.PrintStack()
-		return err
-	}
-	_, _, err = producer.syncProducer.SendMessage(
+	_, _, err := producer.syncProducer.SendMessage(
 		&sarama.ProducerMessage{
 			Topic: topic,
-			Value: sarama.StringEncoder(message),
+			Value: sarama.StringEncoder(msg),
 		})
 	if err != nil {
 		debug.PrintStack()
