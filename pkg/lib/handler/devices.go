@@ -65,6 +65,10 @@ func (handler *Handler) createDevice(d device, t time.Time) error {
 		log.Println("Could not get device type")
 		return err
 	}
+	editMessage := TableEditMessage{
+		Method: "put",
+		Tables: []string{},
+	}
 	query := "INSERT INTO \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableDeviceTypeDevices +
 		"\" (\"" + fieldDeviceTypeId + "\", \"" + fieldDeviceId + "\", \"" + fieldTime + "\") VALUES('" + d.DeviceTypeId +
 		"', '" + d.Id + "', '" + t.Format(time.RFC3339Nano) + "') ON CONFLICT DO NOTHING;"
@@ -81,20 +85,29 @@ func (handler *Handler) createDevice(d device, t time.Time) error {
 		return err
 	}
 	for _, service := range dt.Services {
-		err = handler.createDeviceServiceTable(shortDeviceId, service)
+		table, err := handler.createDeviceServiceTable(shortDeviceId, service)
 		if err != nil {
 			return err
 		}
+		editMessage.Tables = append(editMessage.Tables, table)
+	}
+	b, err := json.Marshal(editMessage)
+	if err != nil {
+		return err
+	}
+	err = handler.producer.Publish(handler.conf.KafkaTopicTableUpdates, string(b))
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
-func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service devicetypes.Service) error {
+func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service devicetypes.Service) (table string, err error) {
 	shortServiceId, err := devicetypes.ShortenId(service.Id)
 	if err != nil {
-		return err
+		return table, err
 	}
-	table := "device:" + shortDeviceId + "_" + "service:" + shortServiceId
+	table = "device:" + shortDeviceId + "_" + "service:" + shortServiceId
 	query := "CREATE TABLE IF NOT EXISTS \"" + table + "\" (time TIMESTAMPTZ NOT NULL"
 	if len(service.Outputs) > 0 {
 		query += ","
@@ -107,7 +120,7 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 	tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		cancel()
-		return err
+		return table, err
 	}
 	if handler.debug {
 		log.Println("Executing:", query)
@@ -116,17 +129,17 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 	if err != nil {
 		_ = tx.Rollback()
 		cancel()
-		return err
+		return table, err
 	}
 	err = tx.Commit()
 	if err != nil {
 		cancel()
-		return err
+		return table, err
 	}
 	tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		cancel()
-		return err
+		return table, err
 	}
 	query = "SELECT create_"
 	if handler.distributed {
@@ -143,19 +156,19 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 			log.Println("INFO: " + err.Error())
 		} else {
 			cancel()
-			return err
+			return table, err
 		}
 	} else {
 		err = tx.Commit()
 		if err != nil {
 			cancel()
-			return err
+			return table, err
 		}
 	}
 	tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		cancel()
-		return err
+		return table, err
 	}
 	if handler.distributed {
 		query = "SELECT set_replication_factor('\"" + table + "\"', " + handler.replication + ");"
@@ -166,16 +179,16 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 		if err != nil {
 			_ = tx.Rollback()
 			cancel()
-			return err
+			return table, err
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
 		cancel()
-		return err
+		return table, err
 	}
 	cancel()
-	return nil
+	return table, err
 }
 
 func (handler *Handler) deleteDevice(deviceId string) error {
@@ -183,7 +196,7 @@ func (handler *Handler) deleteDevice(deviceId string) error {
 	if err != nil {
 		return err
 	}
-	err = handler.deleteTables(shortId, "%")
+	tables, err := handler.deleteTables(shortId, "%")
 	if err != nil {
 		return err
 	}
@@ -192,15 +205,26 @@ func (handler *Handler) deleteDevice(deviceId string) error {
 		log.Println(query)
 	}
 	_, err = handler.db.Exec(query)
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(TableEditMessage{
+		Method: "delete",
+		Tables: tables,
+	})
+	if err != nil {
+		return err
+	}
+	err = handler.producer.Publish(handler.conf.KafkaTopicTableUpdates, string(b))
 	return err
 }
 
-func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string) error {
+func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string) (tables []string, err error) {
 	ctx, cancel := context.WithTimeout(handler.ctx, time.Second*30)
 	tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		cancel()
-		return err
+		return tables, err
 	}
 	query := "SELECT table_name FROM information_schema.tables WHERE table_name like 'device:" + shortDeviceId + "_service:" + shortServiceId + "';"
 	if handler.debug {
@@ -210,18 +234,20 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 	if err != nil {
 		_ = tx.Rollback()
 		cancel()
-		return err
+		return tables, err
 	}
+	tables = []string{}
 	for res.Next() {
 		var table []byte
 		err = res.Scan(&table)
 		if err != nil {
 			_ = tx.Rollback()
 			cancel()
-			return err
+			return tables, err
 		}
+		tables = append(tables, string(table))
 
-		query := "DROP TABLE \"" + string(table) + "\""
+		query := "DROP TABLE IF EXISTS \"" + string(table) + "\" CASCADE"
 		if handler.debug {
 			log.Println("Executing:", query)
 		}
@@ -230,16 +256,16 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 		if err != nil {
 			_ = tx.Rollback()
 			cancel()
-			return err
+			return tables, err
 		}
 	}
 	err = res.Err()
 	if err != nil {
 		_ = tx.Rollback()
 		cancel()
-		return err
+		return tables, err
 	}
 	err = tx.Commit()
 	cancel()
-	return err
+	return tables, err
 }

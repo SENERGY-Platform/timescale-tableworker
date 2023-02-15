@@ -72,24 +72,38 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			log.Printf("Found %v outdated devices that need to be updated\n", len(outdatedDeviceIds))
 		}
 		shortServiceId, err := devicetypes.ShortenId(service.Id)
+		deleted := []string{}
+		created := []string{}
 		for _, outdatedDeviceId := range outdatedDeviceIds {
 			shortDeviceId, err := devicetypes.ShortenId(outdatedDeviceId)
 			if err != nil {
 				return err
 			}
-			err = handler.deleteTables(shortDeviceId, shortServiceId)
+			tables, err := handler.deleteTables(shortDeviceId, shortServiceId)
 			if err != nil {
 				return err
 			}
-			err = handler.createDeviceServiceTable(shortDeviceId, service)
+			deleted = append(deleted, tables...)
+			table, err := handler.createDeviceServiceTable(shortDeviceId, service)
 			if err != nil {
 				return err
 			}
+			created = append(created, table)
 		}
 		err = handler.upsertServiceMeta(service.Id, newHash, t)
 		if err != nil {
 			return err
 		}
+		b, err := json.Marshal(TableEditMessage{
+			Method: "delete",
+			Tables: deleted,
+		})
+		err = handler.producer.Publish(handler.conf.KafkaTopicTableUpdates, string(b))
+		b, err = json.Marshal(TableEditMessage{
+			Method: "put",
+			Tables: created,
+		})
+		err = handler.producer.Publish(handler.conf.KafkaTopicTableUpdates, string(b))
 	}
 	return nil
 }

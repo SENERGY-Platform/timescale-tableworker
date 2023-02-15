@@ -38,6 +38,7 @@ type Handler struct {
 	debug            bool
 	ctx              context.Context
 	conf             config.Config
+	producer         *kafka.Producer
 }
 
 const (
@@ -60,18 +61,24 @@ func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handl
 		return nil, err
 	}
 
-	err = db.Ping()
-	if err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-
 	wg.Add(1)
 	go func() {
 		<-ctx.Done()
 		_ = db.Close()
 		wg.Done()
 	}()
+
+	err = db.Ping()
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	producer, err := kafka.NewProducer(c, ctx, wg)
+	if err != nil {
+		return nil, err
+	}
+
 	handler = &Handler{
 		db:               db,
 		distributed:      c.UseDistributedHypertables,
@@ -80,6 +87,7 @@ func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handl
 		debug:            c.Debug,
 		ctx:              ctx,
 		conf:             c,
+		producer:         producer,
 	}
 	err = handler.initMetadataSchema()
 	return

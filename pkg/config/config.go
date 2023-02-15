@@ -27,12 +27,13 @@ import (
 )
 
 type Config struct {
-	KafkaBootstrap        string
-	KafkaTopicDevices     string
-	KafkaTopicDeviceTypes string
-	KafkaOffset           string
-	KafkaGroupId          string
-	KafkaCommitMessages   bool
+	KafkaBootstrap         string
+	KafkaTopicDevices      string
+	KafkaTopicDeviceTypes  string
+	KafkaTopicTableUpdates string
+	KafkaOffset            string
+	KafkaGroupId           string
+	KafkaCommitMessages    bool
 
 	PostgresHost              string `json:"PostgresHost"`
 	PostgresPort              int    `json:"PostgresPort"`
@@ -49,7 +50,7 @@ type Config struct {
 	Debug bool
 }
 
-//loads config from json in location and used environment variables (e.g ZookeeperUrl --> ZOOKEEPER_URL)
+// loads config from json in location and used environment variables (e.g ZookeeperUrl --> ZOOKEEPER_URL)
 func LoadConfig(location string) (config Config, err error) {
 	file, err2 := os.Open(location)
 	if err2 != nil {

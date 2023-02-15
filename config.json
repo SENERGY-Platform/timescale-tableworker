@@ -2,6 +2,7 @@
   "KafkaBootstrap": "localhost:9092",
   "KafkaTopicDevices": "devices",
   "KafkaTopicDeviceTypes": "device-types",
+  "KafkaTopicTableUpdates": "timescale-table-updates",
   "KafkaOffset": "earliest",
   "KafkaGroupId": "timescale-tableworker",
   "KafkaCommitMessages": true,
