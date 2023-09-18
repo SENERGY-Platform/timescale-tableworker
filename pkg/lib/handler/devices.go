@@ -116,7 +116,7 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 		query += strings.Join(parseContentVariable(output.ContentVariable, ""), ",")
 	}
 	query += ");"
-	ctx, cancel := context.WithTimeout(handler.ctx, time.Second*30)
+	ctx, cancel := context.WithTimeout(handler.ctx, time.Second*120)
 	tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		cancel()
@@ -220,7 +220,7 @@ func (handler *Handler) deleteDevice(deviceId string) error {
 }
 
 func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string) (tables []string, err error) {
-	ctx, cancel := context.WithTimeout(handler.ctx, time.Second*30)
+	ctx, cancel := context.WithTimeout(handler.ctx, time.Second*120)
 	tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		cancel()
