@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
 	"log"
 	"strings"
@@ -60,9 +61,13 @@ func (handler *Handler) handleDeviceMessage(msg []byte, t time.Time) error {
 }
 
 func (handler *Handler) createDevice(d device, t time.Time) error {
-	dt, err := devicetypes.GetDeviceType(d.DeviceTypeId, handler.deviceManagerUrl)
+	// John Doe token, without real user info
+	// invalid for requests from outside the cluster
+	// is only usable because we query the service directly without kong
+	token := "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+	dt, err, _ := handler.deviceRepo.ReadDeviceType(d.DeviceTypeId, token)
 	if err != nil {
-		log.Println("Could not get device type")
+		log.Println("Could not get device type", err)
 		return err
 	}
 	editMessage := TableEditMessage{
@@ -108,14 +113,21 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 		return table, err
 	}
 	table = "device:" + shortDeviceId + "_" + "service:" + shortServiceId
-	query := "CREATE TABLE IF NOT EXISTS \"" + table + "\" (time TIMESTAMPTZ NOT NULL"
-	if len(service.Outputs) > 0 {
-		query += ","
-	}
+
+	fieldDescriptionsList := []string{"time TIMESTAMPTZ NOT NULL"}
 	for _, output := range service.Outputs {
-		query += strings.Join(parseContentVariable(output.ContentVariable, ""), ",")
+		fieldDescriptionsList = append(fieldDescriptionsList, strings.Join(parseContentVariable(output.ContentVariable, ""), ","))
 	}
-	query += ");"
+	fieldDescriptions := strings.Join(fieldDescriptionsList, ",")
+
+	if strings.ContainsAny(table, ";") {
+		return table, errors.New("detect possible sql injection in table name")
+	}
+	if strings.ContainsAny(fieldDescriptions, ";") {
+		return table, errors.New("detect possible sql injection in content-variable name")
+	}
+
+	query := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%v" ( %v );`, table, fieldDescriptions)
 	ctx, cancel := context.WithTimeout(handler.ctx, time.Second*120)
 	tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {

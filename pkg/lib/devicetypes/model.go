@@ -16,6 +16,8 @@
 
 package devicetypes
 
+import "github.com/SENERGY-Platform/models/go/models"
+
 type DeviceTypeCommand struct {
 	Command    Command    `json:"command"`
 	Id         string     `json:"id"`
@@ -31,65 +33,20 @@ const (
 	RightsCommand Command = "RIGHTS"
 )
 
-type DeviceType struct {
-	Id            string    `json:"id"`
-	Name          string    `json:"name"`
-	Description   string    `json:"description"`
-	Services      []Service `json:"services"`
-	DeviceClassId string    `json:"device_class_id"`
-	RdfType       string    `json:"rdf_type"`
-}
+type DeviceType = models.DeviceType
 
-type Service struct {
-	Id          string      `json:"id"`
-	LocalId     string      `json:"local_id"`
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	Interaction Interaction `json:"interaction"`
-	AspectIds   []string    `json:"aspect_ids"`
-	ProtocolId  string      `json:"protocol_id"`
-	Inputs      []Content   `json:"inputs"`
-	Outputs     []Content   `json:"outputs"`
-	FunctionIds []string    `json:"function_ids"`
-	RdfType     string      `json:"rdf_type"`
-}
+type Service = models.Service
 
-type Interaction string
-
-/*
-const (
-	EVENT             Interaction = "event"
-	REQUEST           Interaction = "request"
-	EVENT_AND_REQUEST Interaction = "event+request"
-)
-*/
-
-type Content struct {
-	Id                string          `json:"id"`
-	ContentVariable   ContentVariable `json:"content_variable"`
-	Serialization     string          `json:"serialization"`
-	ProtocolSegmentId string          `json:"protocol_segment_id"`
-}
-
-type Type string
+type Type = models.Type
 
 const (
-	String  Type = "https://schema.org/Text"
-	Integer Type = "https://schema.org/Integer"
-	Float   Type = "https://schema.org/Float"
-	Boolean Type = "https://schema.org/Boolean"
+	String  = models.String
+	Integer = models.Integer
+	Float   = models.Float
+	Boolean = models.Boolean
 
-	List      Type = "https://schema.org/ItemList"
-	Structure Type = "https://schema.org/StructuredValue"
+	List      = models.List
+	Structure = models.Structure
 )
 
-type ContentVariable struct {
-	Id                   string            `json:"id"`
-	Name                 string            `json:"name"`
-	Type                 Type              `json:"type"`
-	SubContentVariables  []ContentVariable `json:"sub_content_variables"`
-	CharacteristicId     string            `json:"characteristic_id"`
-	Value                interface{}       `json:"value"`
-	SerializationOptions []string          `json:"serialization_options"`
-	UnitReference        string            `json:"unit_reference,omitempty"`
-}
+type ContentVariable = models.ContentVariable

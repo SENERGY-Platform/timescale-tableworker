@@ -21,6 +21,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/SENERGY-Platform/device-repository/lib/client"
+	"github.com/SENERGY-Platform/models/go/models"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/kafka"
 	_ "github.com/lib/pq"
@@ -31,14 +33,14 @@ import (
 )
 
 type Handler struct {
-	db               *sql.DB
-	distributed      bool
-	replication      string
-	deviceManagerUrl string
-	debug            bool
-	ctx              context.Context
-	conf             config.Config
-	producer         *kafka.Producer
+	db          *sql.DB
+	distributed bool
+	replication string
+	deviceRepo  DeviceRepo
+	debug       bool
+	ctx         context.Context
+	conf        config.Config
+	producer    Publisher
 }
 
 const (
@@ -50,6 +52,14 @@ const (
 	fieldDeviceTypeId      string = "device_type_id"
 	fieldTime              string = "time"
 )
+
+type Publisher interface {
+	Publish(topic string, msg string) error
+}
+
+type DeviceRepo interface {
+	ReadDeviceType(id string, token string) (result models.DeviceType, err error, errCode int)
+}
 
 func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handler *Handler, err error) {
 	psqlconn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", c.PostgresHost,
@@ -80,14 +90,14 @@ func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handl
 	}
 
 	handler = &Handler{
-		db:               db,
-		distributed:      c.UseDistributedHypertables,
-		replication:      strconv.Itoa(c.HypertableReplicationFactor),
-		deviceManagerUrl: c.DeviceManagerUrl,
-		debug:            c.Debug,
-		ctx:              ctx,
-		conf:             c,
-		producer:         producer,
+		db:          db,
+		distributed: c.UseDistributedHypertables,
+		replication: strconv.Itoa(c.HypertableReplicationFactor),
+		deviceRepo:  client.NewClient(c.DeviceManagerUrl),
+		debug:       c.Debug,
+		ctx:         ctx,
+		conf:        c,
+		producer:    producer,
 	}
 	err = handler.initMetadataSchema()
 	return
