@@ -94,7 +94,7 @@ func compareFds(base []fieldDescription, update []fieldDescription) (added []fie
 			if b.ColumnName == u.ColumnName {
 				found = true
 				// check type and nullable
-				if b.DataType != u.DataType {
+				if strings.ToLower(b.DataType) != strings.ToLower(u.DataType) {
 					newType = append(newType, u)
 				}
 				if b.Nullable != u.Nullable {
