@@ -17,8 +17,11 @@
 package handler
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
 	"log"
 	"time"
@@ -44,11 +47,12 @@ func (handler *Handler) handleDeviceTypeMessage(msg []byte, t time.Time) error {
 
 func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time.Time) error {
 	for _, service := range dt.Services {
+		baseError := errors.New("Device Type Update " + dt.Name + " (" + dt.Id + "), Service " + service.Name + " (" + service.Id + ")")
 		oldHash, lastUpdate, err := handler.getKnownServiceMeta(service.Id)
 		if err != nil {
-			return err
+			return errors.Join(baseError, err)
 		}
-		if !lastUpdate.Before(t) {
+		if lastUpdate.After(t) {
 			if handler.debug {
 				log.Println("Already processed newer version, skipping update...")
 			}
@@ -66,40 +70,82 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 		}
 		outdatedDeviceIds, err := handler.getOutdatedDeviceIds(dt.Id, t)
 		if err != nil {
-			return err
+			return errors.Join(baseError, err)
 		}
 		if handler.debug {
 			log.Printf("Found %v outdated devices that need to be updated\n", len(outdatedDeviceIds))
 		}
 		shortServiceId, err := devicetypes.ShortenId(service.Id)
-		deleted := []string{}
 		created := []string{}
 		for _, outdatedDeviceId := range outdatedDeviceIds {
 			shortDeviceId, err := devicetypes.ShortenId(outdatedDeviceId)
 			if err != nil {
-				return err
+				return errors.Join(baseError, err)
 			}
-			tables, err := handler.deleteTables(shortDeviceId, shortServiceId)
+			table := "device:" + shortDeviceId + "_service:" + shortServiceId
+			currentFd, err := handler.getFieldDescriptionsOfTable(table)
 			if err != nil {
-				return err
+				return errors.Join(baseError, err)
 			}
-			deleted = append(deleted, tables...)
-			table, err := handler.createDeviceServiceTable(shortDeviceId, service)
+			newFd := getFieldDescriptions(service)
+			added, removed, newType, setNotNull, dropNotNull := compareFds(currentFd, newFd)
+			ctx, cancel := context.WithTimeout(handler.ctx, 30*time.Second)
+			defer cancel() // cancel is also called at the end of the loop, deferring it in case of an early return
+			tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
 			if err != nil {
-				return err
+				return errors.Join(baseError, err)
+			}
+			for _, add := range added {
+				_, err = tx.Exec(fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN %s;", table, add.String()))
+				if err != nil {
+					_ = tx.Rollback()
+					return errors.Join(baseError, err)
+				}
+			}
+			for _, rm := range removed {
+				_, err = tx.Exec(fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN %s;", table, rm.ColumnName))
+				if err != nil {
+					_ = tx.Rollback()
+					return errors.Join(baseError, err)
+				}
+			}
+			for _, nt := range newType {
+				query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
+				_, err = tx.Exec(query)
+				if err != nil {
+					_ = tx.Rollback()
+					return errors.Join(baseError, err)
+				}
+			}
+			for _, nn := range setNotNull {
+				query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s SET NOT NULL;", table, nn.ColumnName)
+				_, err = tx.Exec(query)
+				if err != nil {
+					_ = tx.Rollback()
+					return errors.Join(baseError, err)
+				}
+			}
+			for _, nn := range dropNotNull {
+				query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s DROP NOT NULL;", table, nn.ColumnName)
+				_, err = tx.Exec(query)
+				if err != nil {
+					_ = tx.Rollback()
+					return errors.Join(baseError, err)
+				}
+			}
+			err = tx.Commit()
+			if err != nil {
+				_ = tx.Rollback()
+				return errors.Join(baseError, err)
 			}
 			created = append(created, table)
+			cancel()
 		}
 		err = handler.upsertServiceMeta(service.Id, newHash, t)
 		if err != nil {
 			return err
 		}
 		b, err := json.Marshal(TableEditMessage{
-			Method: "delete",
-			Tables: deleted,
-		})
-		err = handler.producer.Publish(handler.conf.KafkaTopicTableUpdates, string(b))
-		b, err = json.Marshal(TableEditMessage{
 			Method: "put",
 			Tables: created,
 		})

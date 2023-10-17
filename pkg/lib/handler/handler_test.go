@@ -44,6 +44,7 @@ func TestHandler(t *testing.T) {
 		t.Error(err)
 		return
 	}
+	conf.Debug = true
 
 	conf.PostgresHost, conf.PostgresPort, conf.PostgresUser, conf.PostgresPw, conf.PostgresDb, err = docker.Timescale(ctx, wg)
 	if err != nil {
@@ -77,7 +78,7 @@ func TestHandler(t *testing.T) {
 		distributed: false,
 		replication: "",
 		deviceRepo:  deviceRepoClient,
-		debug:       false,
+		debug:       true,
 		ctx:         ctx,
 		conf:        conf,
 		producer: &testProducer{f: func(topic string, msg string) error {
@@ -92,9 +93,9 @@ func TestHandler(t *testing.T) {
 		return
 	}
 
-	now := time.Time{} //not really 'now', but a knowable one for testing
+	now := time.Unix(0, 0).UTC() //not really 'now', but a knowable one for testing
 
-	testDtPut := func(t *testing.T, dt models.DeviceType, currentTime time.Time) (dtId string) {
+	testDtPut := func(t *testing.T, dt models.DeviceType, currentTime time.Time) models.DeviceType {
 		dt.GenerateId()
 		timeout, _ := context.WithTimeout(context.Background(), 3*time.Second)
 		t.Run("device-repo", func(t *testing.T) {
@@ -121,7 +122,7 @@ func TestHandler(t *testing.T) {
 				return
 			}
 		})
-		return dt.Id
+		return dt
 	}
 
 	testDevicePut := func(t *testing.T, d models.Device, currentTime time.Time) (id string) {
@@ -159,10 +160,10 @@ func TestHandler(t *testing.T) {
 		return d.Id
 	}
 
-	var simpleDtId, multiPartDtId string
+	var simpleDt, multiPartDt models.DeviceType
 
 	t.Run("simple device-type creation", func(t *testing.T) {
-		simpleDtId = testDtPut(t, models.DeviceType{
+		simpleDt = testDtPut(t, models.DeviceType{
 			Name:          "reduced-snowflake-canary-device-type",
 			Description:   "used for canary service github.com/SENERGY-Platform/snowflake-canary",
 			DeviceClassId: "urn:infai:ses:device-class:997937d6-c5f3-4486-b67c-114675038393",
@@ -186,7 +187,7 @@ func TestHandler(t *testing.T) {
 										SubContentVariables: []models.ContentVariable{
 											{
 												Name:                 "value",
-												Type:                 "https://schema.org/Integer",
+												Type:                 models.Integer,
 												CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
 												FunctionId:           "urn:infai:ses:controlling-function:99240d90-02dd-4d4f-a47c-069cfe77629c",
 												SerializationOptions: []string{models.SerializationOptionXmlAttribute},
@@ -218,7 +219,7 @@ func TestHandler(t *testing.T) {
 										SubContentVariables: []models.ContentVariable{
 											{
 												Name:                 "value",
-												Type:                 "https://schema.org/Integer",
+												Type:                 models.Integer,
 												CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
 												FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
 												AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
@@ -237,7 +238,7 @@ func TestHandler(t *testing.T) {
 		}, now.Add(1*time.Second))
 	})
 	t.Run("multi-part device-type creation", func(t *testing.T) {
-		multiPartDtId = testDtPut(t, models.DeviceType{
+		multiPartDt = testDtPut(t, models.DeviceType{
 			Name:          "snowflake-canary-device-type",
 			Description:   "used for canary service github.com/SENERGY-Platform/snowflake-canary",
 			DeviceClassId: "urn:infai:ses:device-class:997937d6-c5f3-4486-b67c-114675038393",
@@ -261,7 +262,7 @@ func TestHandler(t *testing.T) {
 										SubContentVariables: []models.ContentVariable{
 											{
 												Name:                 "value",
-												Type:                 "https://schema.org/Integer",
+												Type:                 models.Integer,
 												CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
 												FunctionId:           "urn:infai:ses:controlling-function:99240d90-02dd-4d4f-a47c-069cfe77629c",
 												SerializationOptions: []string{models.SerializationOptionXmlAttribute},
@@ -303,7 +304,7 @@ func TestHandler(t *testing.T) {
 										SubContentVariables: []models.ContentVariable{
 											{
 												Name:                 "value",
-												Type:                 "https://schema.org/Integer",
+												Type:                 models.Integer,
 												CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
 												FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
 												AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
@@ -334,17 +335,76 @@ func TestHandler(t *testing.T) {
 	})
 
 	t.Run("simple device creation", func(t *testing.T) {
-		testDevicePut(t, models.Device{
+		deviceId := testDevicePut(t, models.Device{
 			LocalId:      "simple",
 			Name:         "simple",
-			DeviceTypeId: simpleDtId,
+			DeviceTypeId: simpleDt.Id,
 		}, now.Add(2*time.Second))
+		t.Run("device type update", func(t *testing.T) {
+			shortDeviceId, err := models.ShortenId(deviceId)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			shortServiceId, err := models.ShortenId(simpleDt.Services[1].Id)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			table := "device:" + shortDeviceId + "_service:" + shortServiceId
+			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", time) VALUES (0, '1970-01-01T00:00:00Z');")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			simpleDt.Services[1].Outputs[0].ContentVariable.SubContentVariables[0].SubContentVariables[0].Type = models.String
+			simpleDt.Services[1].Outputs[0].ContentVariable.SubContentVariables[0].SubContentVariables = append(simpleDt.Services[1].Outputs[0].ContentVariable.SubContentVariables[0].SubContentVariables, models.ContentVariable{
+				Name:                 "value2",
+				Type:                 models.Integer,
+				CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
+				FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
+				AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
+				SerializationOptions: []string{models.SerializationOptionXmlAttribute},
+			})
+			pl, err := json.Marshal(devicetypes.DeviceTypeCommand{
+				Command:    devicetypes.PutCommand,
+				Id:         simpleDt.Id,
+				Owner:      "test",
+				DeviceType: simpleDt,
+			})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			err = handler.HandleMessage(conf.KafkaTopicDeviceTypes, pl, now.Add(24*time.Hour))
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			row := handler.db.QueryRow("SELECT count(*) FROM \"" + table + "\";")
+			var count int64
+			err = row.Scan(&count)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if count != int64(1) {
+				t.Error("DeviceType Update deleted data")
+			}
+			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", \"measurements.measurement.value2\", time) VALUES (0, 1, '1970-01-01T00:00:00Z');")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			fmt.Println(table)
+		})
 	})
+
 	t.Run("multi-part device creation", func(t *testing.T) {
 		testDevicePut(t, models.Device{
 			LocalId:      "multipart",
 			Name:         "multipart",
-			DeviceTypeId: multiPartDtId,
+			DeviceTypeId: multiPartDt.Id,
 		}, now.Add(3*time.Second))
 	})
 }

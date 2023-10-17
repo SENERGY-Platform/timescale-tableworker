@@ -20,3 +20,19 @@ type TableEditMessage struct {
 	Method string   `json:"method"` // "put" or "delete"
 	Tables []string `json:"tables"`
 }
+
+type fieldDescription struct {
+	ColumnName string
+	Nullable   bool
+	DataType   string
+}
+
+func (f *fieldDescription) String() string {
+	s := f.ColumnName + " " + f.DataType + " "
+	if f.Nullable {
+		s += "NULL"
+	} else {
+		s += "NOT NULL"
+	}
+	return s
+}

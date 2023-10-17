@@ -25,8 +25,8 @@ import (
 	"strings"
 )
 
-func parseContentVariable(c devicetypes.ContentVariable, path string) []string {
-	s := []string{}
+func parseContentVariable(c devicetypes.ContentVariable, path string) []fieldDescription {
+	s := []fieldDescription{}
 	prefix := path
 	if len(prefix) > 0 {
 		prefix += "."
@@ -34,13 +34,30 @@ func parseContentVariable(c devicetypes.ContentVariable, path string) []string {
 	prefix += c.Name
 	switch c.Type {
 	case devicetypes.String:
-		s = append(s, "\""+prefix+"\" text NULL")
+		s = append(s, fieldDescription{
+			ColumnName: "\"" + prefix + "\"",
+			Nullable:   true,
+			DataType:   "text",
+		})
 	case devicetypes.Boolean:
-		s = append(s, "\""+prefix+"\" bool NULL")
+		s = append(s, fieldDescription{
+			ColumnName: "\"" + prefix + "\"",
+			Nullable:   true,
+			DataType:   "bool",
+		})
+
 	case devicetypes.Float:
-		s = append(s, "\""+prefix+"\" double PRECISION NULL")
+		s = append(s, fieldDescription{
+			ColumnName: "\"" + prefix + "\"",
+			Nullable:   true,
+			DataType:   "double PRECISION",
+		})
 	case devicetypes.Integer:
-		s = append(s, "\""+prefix+"\" bigint NULL")
+		s = append(s, fieldDescription{
+			ColumnName: "\"" + prefix + "\"",
+			Nullable:   true,
+			DataType:   "bigint",
+		})
 	case devicetypes.Structure:
 		sort.SliceStable(c.SubContentVariables, func(i, j int) bool { // guarantees same results for different orders
 			return c.SubContentVariables[i].Id < c.SubContentVariables[j].Id
@@ -57,7 +74,10 @@ func parseContentVariable(c devicetypes.ContentVariable, path string) []string {
 func hashServiceOutputs(c devicetypes.Service) string {
 	outputStrings := []string{}
 	for i := range c.Outputs {
-		outputStrings = append(outputStrings, parseContentVariable(c.Outputs[i].ContentVariable, "")...)
+		descs := parseContentVariable(c.Outputs[i].ContentVariable, "")
+		for _, desc := range descs {
+			outputStrings = append(outputStrings, desc.String())
+		}
 	}
 	return hashStringSlice(outputStrings)
 }
@@ -65,4 +85,45 @@ func hashServiceOutputs(c devicetypes.Service) string {
 func hashStringSlice(c []string) string {
 	base := strings.Join(c, ",")
 	return fmt.Sprintf("%X", sha256.Sum256([]byte(base)))
+}
+
+func compareFds(base []fieldDescription, update []fieldDescription) (added []fieldDescription, removed []fieldDescription, newType []fieldDescription, setNotNull []fieldDescription, dropNotNull []fieldDescription) {
+	for _, b := range base {
+		found := false
+		for _, u := range update {
+			if b.ColumnName == u.ColumnName {
+				found = true
+				// check type and nullable
+				if b.DataType != u.DataType {
+					newType = append(newType, u)
+				}
+				if b.Nullable != u.Nullable {
+					if u.Nullable {
+						dropNotNull = append(dropNotNull, u)
+					} else {
+						setNotNull = append(setNotNull, u)
+					}
+				}
+				break
+			}
+		}
+		if !found {
+			removed = append(removed, b)
+		}
+	}
+	// find new
+	for _, u := range update {
+		found := false
+		for _, b := range base {
+			if b.ColumnName == u.ColumnName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			added = append(added, u)
+		}
+	}
+
+	return added, removed, newType, setNotNull, dropNotNull
 }

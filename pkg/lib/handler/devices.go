@@ -114,20 +114,22 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 	}
 	table = "device:" + shortDeviceId + "_" + "service:" + shortServiceId
 
-	fieldDescriptionsList := []string{"time TIMESTAMPTZ NOT NULL"}
-	for _, output := range service.Outputs {
-		fieldDescriptionsList = append(fieldDescriptionsList, strings.Join(parseContentVariable(output.ContentVariable, ""), ","))
+	fieldDescriptions := getFieldDescriptions(service)
+	fieldDescriptionStrings := []string{}
+	for _, fd := range fieldDescriptions {
+		fieldDescriptionStrings = append(fieldDescriptionStrings, fd.String())
 	}
-	fieldDescriptions := strings.Join(fieldDescriptionsList, ",")
+
+	fieldDescriptionString := strings.Join(fieldDescriptionStrings, ",")
 
 	if strings.ContainsAny(table, ";") {
 		return table, errors.New("detect possible sql injection in table name")
 	}
-	if strings.ContainsAny(fieldDescriptions, ";") {
+	if strings.ContainsAny(fieldDescriptionString, ";") {
 		return table, errors.New("detect possible sql injection in content-variable name")
 	}
 
-	query := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%v" ( %v );`, table, fieldDescriptions)
+	query := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS "%v" ( %v );`, table, fieldDescriptionString)
 	ctx, cancel := context.WithTimeout(handler.ctx, time.Second*120)
 	tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
@@ -280,4 +282,38 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 	err = tx.Commit()
 	cancel()
 	return tables, err
+}
+
+func (handler *Handler) getFieldDescriptionsOfTable(table string) ([]fieldDescription, error) {
+	res := []fieldDescription{}
+	rows, err := handler.db.Query(fmt.Sprintf("SELECT column_name, is_nullable, data_type from information_schema.columns where table_name = '%s'", table))
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		fd := fieldDescription{}
+		no := ""
+		err = rows.Scan(&fd.ColumnName, &no, &fd.DataType)
+		if err != nil {
+			return nil, err
+		}
+		fd.ColumnName = "\"" + fd.ColumnName + "\""
+		if strings.ToUpper(no) != "NO" {
+			fd.Nullable = true
+		}
+		res = append(res, fd)
+	}
+	return res, nil
+}
+
+func getFieldDescriptions(service devicetypes.Service) []fieldDescription {
+	res := []fieldDescription{{
+		ColumnName: "\"time\"",
+		Nullable:   false,
+		DataType:   "timestamp with time zone",
+	}}
+	for _, output := range service.Outputs {
+		res = append(res, parseContentVariable(output.ContentVariable, "")...)
+	}
+	return res
 }
