@@ -96,14 +96,22 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				return errors.Join(baseError, err)
 			}
 			for _, add := range added {
-				_, err = tx.Exec(fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN %s;", table, add.String()))
+				query := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN %s;", table, add.String())
+				if handler.debug {
+					log.Println("Executing:", query)
+				}
+				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
 					return errors.Join(baseError, err)
 				}
 			}
 			for _, rm := range removed {
-				_, err = tx.Exec(fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN %s;", table, rm.ColumnName))
+				query := fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN %s;", table, rm.ColumnName)
+				if handler.debug {
+					log.Println("Executing:", query)
+				}
+				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
 					return errors.Join(baseError, err)
@@ -111,6 +119,9 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			}
 			for _, nt := range newType {
 				query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
+				if handler.debug {
+					log.Println("Executing:", query)
+				}
 				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
@@ -119,6 +130,9 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			}
 			for _, nn := range setNotNull {
 				query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s SET NOT NULL;", table, nn.ColumnName)
+				if handler.debug {
+					log.Println("Executing:", query)
+				}
 				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
@@ -127,6 +141,9 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			}
 			for _, nn := range dropNotNull {
 				query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s DROP NOT NULL;", table, nn.ColumnName)
+				if handler.debug {
+					log.Println("Executing:", query)
+				}
 				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
