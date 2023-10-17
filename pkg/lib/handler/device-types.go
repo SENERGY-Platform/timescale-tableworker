@@ -89,7 +89,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			}
 			newFd := getFieldDescriptions(service)
 			added, removed, newType, setNotNull, dropNotNull := compareFds(currentFd, newFd)
-			ctx, cancel := context.WithTimeout(handler.ctx, 30*time.Second)
+			ctx, cancel := context.WithTimeout(handler.ctx, 10*time.Minute)
 			defer cancel() // cancel is also called at the end of the loop, deferring it in case of an early return
 			tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
 			if err != nil {
