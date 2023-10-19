@@ -47,6 +47,8 @@ type Config struct {
 
 	DeviceManagerUrl string `json:"DeviceManagerUrl"`
 
+	DevNotificationsUrl string `json:"DevNotificationsUrl"`
+
 	Debug bool
 }
 

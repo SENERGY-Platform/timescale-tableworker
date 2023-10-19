@@ -21,6 +21,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	devNotifications "github.com/SENERGY-Platform/developer-notifications/pkg/client"
+	"github.com/SENERGY-Platform/developer-notifications/pkg/model"
 	"github.com/SENERGY-Platform/device-repository/lib/client"
 	"github.com/SENERGY-Platform/models/go/models"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
@@ -33,14 +35,15 @@ import (
 )
 
 type Handler struct {
-	db          *sql.DB
-	distributed bool
-	replication string
-	deviceRepo  DeviceRepo
-	debug       bool
-	ctx         context.Context
-	conf        config.Config
-	producer    Publisher
+	db                     *sql.DB
+	distributed            bool
+	replication            string
+	deviceRepo             DeviceRepo
+	debug                  bool
+	ctx                    context.Context
+	conf                   config.Config
+	producer               Publisher
+	devNotificationsClient devNotifications.Client
 }
 
 const (
@@ -90,14 +93,15 @@ func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handl
 	}
 
 	handler = &Handler{
-		db:          db,
-		distributed: c.UseDistributedHypertables,
-		replication: strconv.Itoa(c.HypertableReplicationFactor),
-		deviceRepo:  client.NewClient(c.DeviceManagerUrl),
-		debug:       c.Debug,
-		ctx:         ctx,
-		conf:        c,
-		producer:    producer,
+		db:                     db,
+		distributed:            c.UseDistributedHypertables,
+		replication:            strconv.Itoa(c.HypertableReplicationFactor),
+		deviceRepo:             client.NewClient(c.DeviceManagerUrl),
+		debug:                  c.Debug,
+		ctx:                    ctx,
+		conf:                   c,
+		producer:               producer,
+		devNotificationsClient: devNotifications.New(c.DevNotificationsUrl),
 	}
 	err = handler.initMetadataSchema()
 	return
@@ -114,8 +118,17 @@ func (handler *Handler) HandleMessage(topic string, msg []byte, t time.Time) err
 	}
 }
 
-func HandleError(err error, _ *kafka.Consumer) {
+func (handler *Handler) HandleError(err error, _ *kafka.Consumer) {
 	log.Println(err)
+	sendErr := handler.devNotificationsClient.SendMessage(model.Message{
+		Sender: "timescale-tableworker",
+		Title:  "Error handling table updates",
+		Body:   err.Error(),
+		Tags:   nil,
+	})
+	if sendErr != nil {
+		log.Println("WARNING: Could not send developer-notification: " + sendErr.Error())
+	}
 }
 
 func (handler *Handler) initMetadataSchema() error {

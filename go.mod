@@ -5,6 +5,7 @@ go 1.21
 toolchain go1.21.0
 
 require (
+	github.com/SENERGY-Platform/developer-notifications v0.0.0-20231019073933-3a60bb47e556
 	github.com/SENERGY-Platform/device-repository v0.0.0-20230920111150-c4f598711a6e
 	github.com/SENERGY-Platform/models/go v0.0.0-20230824080159-16585960df38
 	github.com/Shopify/sarama v1.38.1

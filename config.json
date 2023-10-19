@@ -19,5 +19,7 @@
 
   "DeviceManagerUrl": "http://device-manager:8080",
 
+  "DevNotificationsUrl": "http://api.developer-notifications:8080",
+
   "Debug": false
 }

@@ -48,6 +48,8 @@ github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migc
 github.com/Microsoft/go-winio v0.6.1/go.mod h1:LRdKpFKfdobln8UmuiYcKPot9D2v6svN5+sAH+4kjUM=
 github.com/Microsoft/hcsshim v0.11.1 h1:hJ3s7GbWlGK4YVV92sO88BQSyF4ZLVy7/awqOlPxFbA=
 github.com/Microsoft/hcsshim v0.11.1/go.mod h1:nFJmaO4Zr5Y7eADdFOpYswDDlNVbvcIJJNJLECr5JQg=
+github.com/SENERGY-Platform/developer-notifications v0.0.0-20231019073933-3a60bb47e556 h1:uYJIl0QFiLxUb6fm8AkuxyI4AwLrGrYRKhuyb8FvwZw=
+github.com/SENERGY-Platform/developer-notifications v0.0.0-20231019073933-3a60bb47e556/go.mod h1:ldfdQxeaLdIP7gEsoOOwZCNPCaOzUsQB3uSPg0Nc+ME=
 github.com/SENERGY-Platform/device-repository v0.0.0-20230920111150-c4f598711a6e h1:A2gHrLN3ZfJxbZUwrrcnIzUkYNP24kEkHemWlGHZONE=
 github.com/SENERGY-Platform/device-repository v0.0.0-20230920111150-c4f598711a6e/go.mod h1:EcxUdAfb+uqO8Zlh4XEJhvBUniAJg/vCfA+fZ62HStM=
 github.com/SENERGY-Platform/models/go v0.0.0-20230824080159-16585960df38 h1:PDvFwIJBnFyKt1KeepkABNIS57+WhVj4vBw7X5JGZJw=
