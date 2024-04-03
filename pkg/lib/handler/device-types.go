@@ -22,9 +22,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
 	"log"
 	"time"
+
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
 )
 
 func (handler *Handler) handleDeviceTypeMessage(msg []byte, t time.Time) error {
@@ -76,6 +77,9 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			log.Printf("Found %v outdated devices that need to be updated\n", len(outdatedDeviceIds))
 		}
 		shortServiceId, err := devicetypes.ShortenId(service.Id)
+		if err != nil {
+			return errors.Join(baseError, errors.New("could not shorten service id"), err)
+		}
 		created := []string{}
 		for _, outdatedDeviceId := range outdatedDeviceIds {
 			shortDeviceId, err := devicetypes.ShortenId(outdatedDeviceId)
@@ -83,80 +87,94 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				return errors.Join(baseError, errors.New("could not obtain shortened device id"), err)
 			}
 			table := "device:" + shortDeviceId + "_service:" + shortServiceId
-			currentFd, err := handler.getFieldDescriptionsOfTable(table)
+			exists, err := handler.tableExists(table)
 			if err != nil {
-				return errors.Join(baseError, errors.New("could not obtain field descriptions"), err)
+				return errors.Join(baseError, errors.New("could not check if table exists "+table), err)
 			}
-			newFd := getFieldDescriptions(service)
-			added, removed, newType, setNotNull, dropNotNull := compareFds(currentFd, newFd)
-			ctx, cancel := context.WithTimeout(handler.ctx, 10*time.Minute)
-			defer cancel() // cancel is also called at the end of the loop, deferring it in case of an early return
-			tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
-			if err != nil {
-				return errors.Join(baseError, err)
-			}
-			for _, add := range added {
-				query := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN %s;", table, add.String())
+			if !exists {
 				if handler.debug {
-					log.Println("Executing:", query)
+					log.Printf("Table does not exist yet, creating now %v\n", table)
 				}
-				_, err = tx.Exec(query)
+				handler.createDeviceServiceTable(shortDeviceId, service)
+			} else {
+				if handler.debug {
+					log.Printf("Table exists already, updating now %v\n", table)
+				}
+				currentFd, err := handler.getFieldDescriptionsOfTable(table)
+				if err != nil {
+					return errors.Join(baseError, errors.New("could not obtain field descriptions"), err)
+				}
+				newFd := getFieldDescriptions(service)
+				added, removed, newType, setNotNull, dropNotNull := compareFds(currentFd, newFd)
+				ctx, cancel := context.WithTimeout(handler.ctx, 10*time.Minute)
+				defer cancel() // cancel is also called at the end of the loop, deferring it in case of an early return
+				tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
+				if err != nil {
+					return errors.Join(baseError, err)
+				}
+				for _, add := range added {
+					query := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN %s;", table, add.String())
+					if handler.debug {
+						log.Println("Executing:", query)
+					}
+					_, err = tx.Exec(query)
+					if err != nil {
+						_ = tx.Rollback()
+						return errors.Join(baseError, errors.New("could not execute query "+query), err)
+					}
+				}
+				for _, rm := range removed {
+					query := fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN %s;", table, rm.ColumnName)
+					if handler.debug {
+						log.Println("Executing:", query)
+					}
+					_, err = tx.Exec(query)
+					if err != nil {
+						_ = tx.Rollback()
+						return errors.Join(baseError, errors.New("could not execute query "+query), err)
+					}
+				}
+				for _, nt := range newType {
+					query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
+					if handler.debug {
+						log.Println("Executing:", query)
+					}
+					_, err = tx.Exec(query)
+					if err != nil {
+						_ = tx.Rollback()
+						return errors.Join(baseError, errors.New("could not execute query "+query), err)
+					}
+				}
+				for _, nn := range setNotNull {
+					query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s SET NOT NULL;", table, nn.ColumnName)
+					if handler.debug {
+						log.Println("Executing:", query)
+					}
+					_, err = tx.Exec(query)
+					if err != nil {
+						_ = tx.Rollback()
+						return errors.Join(baseError, errors.New("could not execute query "+query), err)
+					}
+				}
+				for _, nn := range dropNotNull {
+					query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s DROP NOT NULL;", table, nn.ColumnName)
+					if handler.debug {
+						log.Println("Executing:", query)
+					}
+					_, err = tx.Exec(query)
+					if err != nil {
+						_ = tx.Rollback()
+						return errors.Join(baseError, errors.New("could not execute query "+query), err)
+					}
+				}
+				err = tx.Commit()
 				if err != nil {
 					_ = tx.Rollback()
-					return errors.Join(baseError, errors.New("could not execute query "+query), err)
+					return errors.Join(baseError, errors.New("could not commit"), err)
 				}
-			}
-			for _, rm := range removed {
-				query := fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN %s;", table, rm.ColumnName)
-				if handler.debug {
-					log.Println("Executing:", query)
-				}
-				_, err = tx.Exec(query)
-				if err != nil {
-					_ = tx.Rollback()
-					return errors.Join(baseError, errors.New("could not execute query "+query), err)
-				}
-			}
-			for _, nt := range newType {
-				query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
-				if handler.debug {
-					log.Println("Executing:", query)
-				}
-				_, err = tx.Exec(query)
-				if err != nil {
-					_ = tx.Rollback()
-					return errors.Join(baseError, errors.New("could not execute query "+query), err)
-				}
-			}
-			for _, nn := range setNotNull {
-				query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s SET NOT NULL;", table, nn.ColumnName)
-				if handler.debug {
-					log.Println("Executing:", query)
-				}
-				_, err = tx.Exec(query)
-				if err != nil {
-					_ = tx.Rollback()
-					return errors.Join(baseError, errors.New("could not execute query "+query), err)
-				}
-			}
-			for _, nn := range dropNotNull {
-				query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s DROP NOT NULL;", table, nn.ColumnName)
-				if handler.debug {
-					log.Println("Executing:", query)
-				}
-				_, err = tx.Exec(query)
-				if err != nil {
-					_ = tx.Rollback()
-					return errors.Join(baseError, errors.New("could not execute query "+query), err)
-				}
-			}
-			err = tx.Commit()
-			if err != nil {
-				_ = tx.Rollback()
-				return errors.Join(baseError, errors.New("could not commit"), err)
+				cancel()
 			}
 			created = append(created, table)
-			cancel()
 		}
 		err = handler.upsertServiceMeta(service.Id, newHash, t)
 		if err != nil {
@@ -166,7 +184,13 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			Method: "put",
 			Tables: created,
 		})
+		if err != nil {
+			return err
+		}
 		err = handler.producer.Publish(handler.conf.KafkaTopicTableUpdates, string(b))
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }

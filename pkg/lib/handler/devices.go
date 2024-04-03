@@ -306,6 +306,12 @@ func (handler *Handler) getFieldDescriptionsOfTable(table string) ([]fieldDescri
 	return res, nil
 }
 
+func (handler *Handler) tableExists(table string) (found bool, err error) {
+	row := handler.db.QueryRow(fmt.Sprintf("SELECT count(table_name) > 0 FROM information_schema.tables WHERE table_name = = '%s'", table))
+	err = row.Scan(&found)
+	return
+}
+
 func getFieldDescriptions(service devicetypes.Service) []fieldDescription {
 	res := []fieldDescription{{
 		ColumnName: "\"time\"",
