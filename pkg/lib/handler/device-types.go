@@ -50,7 +50,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 		baseError := errors.New("Device Type Update " + dt.Name + " (" + dt.Id + "), Service " + service.Name + " (" + service.Id + ")")
 		oldHash, lastUpdate, err := handler.getKnownServiceMeta(service.Id)
 		if err != nil {
-			return errors.Join(baseError, err)
+			return errors.Join(baseError, errors.New("could not obtain service meta"), err)
 		}
 		if lastUpdate.After(t) {
 			if handler.debug {
@@ -70,7 +70,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 		}
 		outdatedDeviceIds, err := handler.getOutdatedDeviceIds(dt.Id, t)
 		if err != nil {
-			return errors.Join(baseError, err)
+			return errors.Join(baseError, errors.New("could not obtain outdated device ids"), err)
 		}
 		if handler.debug {
 			log.Printf("Found %v outdated devices that need to be updated\n", len(outdatedDeviceIds))
@@ -80,12 +80,12 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 		for _, outdatedDeviceId := range outdatedDeviceIds {
 			shortDeviceId, err := devicetypes.ShortenId(outdatedDeviceId)
 			if err != nil {
-				return errors.Join(baseError, err)
+				return errors.Join(baseError, errors.New("could not obtain shortened device id"), err)
 			}
 			table := "device:" + shortDeviceId + "_service:" + shortServiceId
 			currentFd, err := handler.getFieldDescriptionsOfTable(table)
 			if err != nil {
-				return errors.Join(baseError, err)
+				return errors.Join(baseError, errors.New("could not obtain field descriptions"), err)
 			}
 			newFd := getFieldDescriptions(service)
 			added, removed, newType, setNotNull, dropNotNull := compareFds(currentFd, newFd)
@@ -103,7 +103,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
-					return errors.Join(baseError, err)
+					return errors.Join(baseError, errors.New("could not execute query "+query), err)
 				}
 			}
 			for _, rm := range removed {
@@ -114,7 +114,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
-					return errors.Join(baseError, err)
+					return errors.Join(baseError, errors.New("could not execute query "+query), err)
 				}
 			}
 			for _, nt := range newType {
@@ -125,7 +125,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
-					return errors.Join(baseError, err)
+					return errors.Join(baseError, errors.New("could not execute query "+query), err)
 				}
 			}
 			for _, nn := range setNotNull {
@@ -136,7 +136,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
-					return errors.Join(baseError, err)
+					return errors.Join(baseError, errors.New("could not execute query "+query), err)
 				}
 			}
 			for _, nn := range dropNotNull {
@@ -147,13 +147,13 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				_, err = tx.Exec(query)
 				if err != nil {
 					_ = tx.Rollback()
-					return errors.Join(baseError, err)
+					return errors.Join(baseError, errors.New("could not execute query "+query), err)
 				}
 			}
 			err = tx.Commit()
 			if err != nil {
 				_ = tx.Rollback()
-				return errors.Join(baseError, err)
+				return errors.Join(baseError, errors.New("could not commit"), err)
 			}
 			created = append(created, table)
 			cancel()
