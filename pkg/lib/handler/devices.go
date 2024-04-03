@@ -307,7 +307,7 @@ func (handler *Handler) getFieldDescriptionsOfTable(table string) ([]fieldDescri
 }
 
 func (handler *Handler) tableExists(table string) (found bool, err error) {
-	row := handler.db.QueryRow(fmt.Sprintf("SELECT count(table_name) > 0 FROM information_schema.tables WHERE table_name = = '%s'", table))
+	row := handler.db.QueryRow(fmt.Sprintf("SELECT count(table_name) > 0 FROM information_schema.tables WHERE table_name = '%s'", table))
 	err = row.Scan(&found)
 	return
 }
