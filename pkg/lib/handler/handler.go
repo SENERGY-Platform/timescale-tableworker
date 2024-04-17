@@ -54,6 +54,12 @@ const (
 	fieldDeviceId          string = "device_id"
 	fieldDeviceTypeId      string = "device_type_id"
 	fieldTime              string = "time"
+	tableUpdateBackups     string = "update_backups"
+	fieldViewSchema        string = "view_schema"
+	fieldViewName          string = "view_name"
+	fieldBackupTable       string = "backup_table"
+	fieldViewDefinition    string = "view_definition"
+	fieldMaterializedOnly  string = "materialized_only"
 )
 
 type Publisher interface {
@@ -158,6 +164,23 @@ func (handler *Handler) initMetadataSchema() error {
 		fieldDeviceTypeId + " text NOT NULL, " +
 		fieldDeviceId + " text PRIMARY KEY, " +
 		fieldTime + " TIMESTAMP NOT NULL" +
+		");"
+	if handler.debug {
+		log.Println(query)
+	}
+	_, err = handler.db.Exec(query)
+	if err != nil {
+		return err
+	}
+
+	query = "CREATE TABLE IF NOT EXISTS \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableUpdateBackups + "\" (" +
+		fieldDeviceId + " text NOT NULL, " +
+		fieldViewSchema + " text NOT NULL, " +
+		fieldViewName + " text NOT NULL, " +
+		fieldBackupTable + " text NOT NULL, " +
+		fieldViewDefinition + " text NOT NULL, " +
+		fieldMaterializedOnly + " bool NOT NULL, " +
+		"PRIMARY KEY (" + fieldDeviceId + ", " + fieldViewSchema + ", " + fieldViewName + ")" +
 		");"
 	if handler.debug {
 		log.Println(query)

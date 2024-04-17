@@ -1,3 +1,5 @@
 .idea
 *.iml
 timescale-tableworker
+.vscode
+__debug_bin*

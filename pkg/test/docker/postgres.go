@@ -18,10 +18,14 @@ package docker
 
 import (
 	"context"
+	"errors"
+	"log"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"log"
-	"sync"
 )
 
 func Timescale(ctx context.Context, wg *sync.WaitGroup) (host string, port int, user string, pw string, db string, err error) {
@@ -29,19 +33,30 @@ func Timescale(ctx context.Context, wg *sync.WaitGroup) (host string, port int, 
 	pw = "postgrespw"
 	user = "postgres"
 	db = "postgres"
-	c, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:           "timescale/timescaledb:2.3.0-pg13",
-			Tmpfs:           map[string]string{},
-			WaitingFor:      wait.ForListeningPort("5432/tcp"),
-			ExposedPorts:    []string{"5432/tcp"},
-			AlwaysPullImage: true,
-			Env: map[string]string{
-				"POSTGRES_PASSWORD": pw,
+	errStr := "The container name \"/timescale-wrapper-test-db\" is already in use"
+	err = errors.New(errStr)
+	i := 0
+	var c testcontainers.Container
+	for err != nil && strings.Contains(err.Error(), errStr) && i < 15 {
+		i++
+		c, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+			ContainerRequest: testcontainers.ContainerRequest{
+				Image:           "timescale/timescaledb:2.8.1-pg13",
+				Tmpfs:           map[string]string{},
+				WaitingFor:      wait.ForListeningPort("5432/tcp"),
+				ExposedPorts:    []string{"5432/tcp"},
+				AlwaysPullImage: false,
+				Env: map[string]string{
+					"POSTGRES_PASSWORD": pw,
+				},
+				Name: "timescale-wrapper-test-db",
 			},
-		},
-		Started: true,
-	})
+			Started: true,
+		})
+		if err != nil {
+			time.Sleep(time.Second)
+		}
+	}
 	if err != nil {
 		return host, port, user, pw, db, err
 	}

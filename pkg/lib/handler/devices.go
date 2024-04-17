@@ -284,9 +284,9 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 	return tables, err
 }
 
-func (handler *Handler) getFieldDescriptionsOfTable(table string) ([]fieldDescription, error) {
+func getFieldDescriptionsOfTable(table string, tx *sql.Tx) ([]fieldDescription, error) {
 	res := []fieldDescription{}
-	rows, err := handler.db.Query(fmt.Sprintf("SELECT column_name, is_nullable, data_type from information_schema.columns where table_name = '%s'", table))
+	rows, err := tx.Query(fmt.Sprintf("SELECT column_name, is_nullable, data_type from information_schema.columns where table_name = '%s'", table))
 	if err != nil {
 		return nil, err
 	}
