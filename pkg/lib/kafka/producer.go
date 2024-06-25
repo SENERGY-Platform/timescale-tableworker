@@ -18,10 +18,12 @@ package kafka
 
 import (
 	"context"
-	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
-	"github.com/Shopify/sarama"
 	"runtime/debug"
 	"sync"
+	"time"
+
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
+	"github.com/Shopify/sarama"
 )
 
 type Producer struct {
@@ -51,6 +53,8 @@ func (producer *Producer) ensureConnection() (syncProducer sarama.SyncProducer, 
 	kafkaConf := sarama.NewConfig()
 	kafkaConf.Producer.Flush.MaxMessages = 1
 	kafkaConf.Producer.Return.Successes = true
+	kafkaConf.Net.ReadTimeout = 120 * time.Second
+	kafkaConf.Net.WriteTimeout = 120 * time.Second
 	syncP, err := sarama.NewSyncProducer([]string{producer.config.KafkaBootstrap}, kafkaConf)
 	if err != nil {
 		producer.syncProducer = syncP
