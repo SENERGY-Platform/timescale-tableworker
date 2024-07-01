@@ -68,7 +68,7 @@ func TestHandler(t *testing.T) {
 		return
 	}
 
-	deviceRepoClient, deviceRepoDb, _, err := client.NewTestClient()
+	deviceRepoClient, deviceRepoDb, err := client.NewTestClient()
 	if err != nil {
 		t.Error(err)
 		return
@@ -521,8 +521,8 @@ func TestHandler(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[2].DataType != "text" || fd[2].ColumnName != "\"measurements.measurement.value\"" {
-				t.Error("Expected different field descriptions")
+			if len(fd) != 3 || fd[2].DataType != "bigint" || fd[2].ColumnName != "\"measurements.measurement.value3\"" || fd[1].DataType != "text" || fd[1].ColumnName != "\"measurements.measurement.value\"" {
+				t.Errorf("Expected different field descriptions:\n%#v\n", fd)
 				return
 			}
 			fd, err = getFieldDescriptionsOfTable(table+"_fd", tx)
@@ -536,7 +536,7 @@ func TestHandler(t *testing.T) {
 				return
 			}
 			cancel()
-			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[2].DataType != "text" || fd[2].ColumnName != "\"measurements.measurement.value\"" {
+			if len(fd) != 3 || fd[2].DataType != "bigint" || fd[2].ColumnName != "\"measurements.measurement.value3\"" || fd[1].DataType != "text" || fd[1].ColumnName != "\"measurements.measurement.value\"" {
 				t.Error("Expected different field descriptions")
 				return
 			}
