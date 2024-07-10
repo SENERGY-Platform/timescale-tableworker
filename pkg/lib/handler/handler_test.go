@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -521,7 +523,10 @@ func TestHandler(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if len(fd) != 3 || fd[2].DataType != "bigint" || fd[2].ColumnName != "\"measurements.measurement.value3\"" || fd[1].DataType != "text" || fd[1].ColumnName != "\"measurements.measurement.value\"" {
+			slices.SortFunc(fd, func(a, b fieldDescription) int {
+				return strings.Compare(a.ColumnName, b.ColumnName)
+			})
+			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[0].DataType != "text" || fd[0].ColumnName != "\"measurements.measurement.value\"" {
 				t.Errorf("Expected different field descriptions:\n%#v\n", fd)
 				return
 			}
@@ -536,7 +541,10 @@ func TestHandler(t *testing.T) {
 				return
 			}
 			cancel()
-			if len(fd) != 3 || fd[2].DataType != "bigint" || fd[2].ColumnName != "\"measurements.measurement.value3\"" || fd[1].DataType != "text" || fd[1].ColumnName != "\"measurements.measurement.value\"" {
+			slices.SortFunc(fd, func(a, b fieldDescription) int {
+				return strings.Compare(a.ColumnName, b.ColumnName)
+			})
+			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[0].DataType != "text" || fd[0].ColumnName != "\"measurements.measurement.value\"" {
 				t.Error("Expected different field descriptions")
 				return
 			}
