@@ -132,7 +132,7 @@ func TestHandler(t *testing.T) {
 		d.GenerateId()
 		timeout, _ := context.WithTimeout(context.Background(), 3*time.Second)
 		t.Run("device-repo", func(t *testing.T) {
-			err = deviceRepoDb.SetDevice(timeout, d)
+			err = deviceRepoDb.SetDevice(timeout, client.DeviceWithConnectionState{Device: d})
 			if err != nil {
 				t.Error(err)
 				return
