@@ -6,7 +6,7 @@ toolchain go1.23.4
 
 require (
 	github.com/SENERGY-Platform/developer-notifications v0.0.4
-	github.com/SENERGY-Platform/device-repository v0.1.51
+	github.com/SENERGY-Platform/device-repository v0.1.52
 	github.com/SENERGY-Platform/models/go v0.0.0-20241007061544-de7132ae94e4
 	github.com/Shopify/sarama v1.38.1
 	github.com/google/uuid v1.6.0

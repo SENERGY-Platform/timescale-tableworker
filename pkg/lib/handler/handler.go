@@ -102,7 +102,7 @@ func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handl
 		db:                     db,
 		distributed:            c.UseDistributedHypertables,
 		replication:            strconv.Itoa(c.HypertableReplicationFactor),
-		deviceRepo:             client.NewClient(c.DeviceManagerUrl),
+		deviceRepo:             client.NewClient(c.DeviceManagerUrl, nil),
 		debug:                  c.Debug,
 		ctx:                    ctx,
 		conf:                   c,
