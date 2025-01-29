@@ -41,7 +41,7 @@ func Timescale(ctx context.Context, wg *sync.WaitGroup) (host string, port int, 
 		i++
 		c, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 			ContainerRequest: testcontainers.ContainerRequest{
-				Image:           "timescale/timescaledb:2.8.1-pg13",
+				Image:           "timescale/timescaledb-ha:pg13.15-ts2.15.3",
 				Tmpfs:           map[string]string{},
 				WaitingFor:      wait.ForListeningPort("5432/tcp"),
 				ExposedPorts:    []string{"5432/tcp"},
@@ -60,11 +60,12 @@ func Timescale(ctx context.Context, wg *sync.WaitGroup) (host string, port int, 
 	if err != nil {
 		return host, port, user, pw, db, err
 	}
-	host, err = c.ContainerIP(ctx)
+	host = "localhost"
+	portStr, err := c.MappedPort(ctx, "5432/tcp")
 	if err != nil {
 		return host, port, user, pw, db, err
 	}
-	port = 5432
+	port = portStr.Int()
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

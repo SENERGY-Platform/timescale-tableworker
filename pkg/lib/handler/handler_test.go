@@ -356,18 +356,108 @@ func TestHandler(t *testing.T) {
 			Name:         "simple",
 			DeviceTypeId: simpleDt.Id,
 		}, now.Add(2*time.Second))
+		shortDeviceId, err := models.ShortenId(deviceId)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		shortServiceId, err := models.ShortenId(simpleDt.Services[1].Id)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		table := "device:" + shortDeviceId + "_service:" + shortServiceId
+		_, err = handler.db.Exec("ALTER TABLE \"" + table + "\" ALTER COLUMN time TYPE TIMESTAMP") // create legacy time format
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		validate := func(t *testing.T) {
+			row := handler.db.QueryRow("SELECT count(*) FROM \"" + table + "\";")
+			var count int64
+			err = row.Scan(&count)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if count != int64(1) {
+				t.Error("Deleted data")
+			}
+			row = handler.db.QueryRow("SELECT count(*) FROM \"" + table + "_ld\";")
+			err = row.Scan(&count)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if count != int64(1) {
+				t.Error("Deleted data in view")
+			}
+			var val string
+			err = handler.db.QueryRow("SELECT \"measurements.measurement.value\" FROM \"" + table + "_ld\" ORDER BY time DESC LIMIT 1;").Scan(&val)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if val != "0" {
+				t.Error("Wrong data in view")
+			}
+			row = handler.db.QueryRow("SELECT count(*) FROM \"" + table + "_fd\";")
+			err = row.Scan(&count)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if count != int64(1) {
+				t.Error("DeviceType Update deleted data in view")
+			}
+			err = handler.db.QueryRow("SELECT \"measurements.measurement.value\" FROM \"" + table + "_fd\" ORDER BY time DESC LIMIT 1;").Scan(&val)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if val != "0" {
+				t.Error("DeviceType Update wrong data in view")
+			}
+			ctx, cancel = context.WithTimeout(handler.ctx, 10*time.Minute)
+			defer cancel()
+			tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			fd, err := getFieldDescriptionsOfTable(table+"_ld", tx)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			slices.SortFunc(fd, func(a, b fieldDescription) int {
+				return strings.Compare(a.ColumnName, b.ColumnName)
+			})
+			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[0].DataType != "text" || fd[0].ColumnName != "\"measurements.measurement.value\"" {
+				t.Errorf("Expected different field descriptions:\n%#v\n", fd)
+				return
+			}
+			fd, err = getFieldDescriptionsOfTable(table+"_fd", tx)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			err = tx.Rollback()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			cancel()
+			slices.SortFunc(fd, func(a, b fieldDescription) int {
+				return strings.Compare(a.ColumnName, b.ColumnName)
+			})
+			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[0].DataType != "text" || fd[0].ColumnName != "\"measurements.measurement.value\"" {
+				t.Error("Expected different field descriptions")
+				return
+			}
+		}
 		t.Run("device type update", func(t *testing.T) {
-			shortDeviceId, err := models.ShortenId(deviceId)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			shortServiceId, err := models.ShortenId(simpleDt.Services[1].Id)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			table := "device:" + shortDeviceId + "_service:" + shortServiceId
+
 			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", \"measurements.measurement.value2\", time) VALUES (0, 1, '1970-01-01T00:00:00Z');")
 			if err != nil {
 				t.Error(err)
@@ -466,88 +556,30 @@ func TestHandler(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			row := handler.db.QueryRow("SELECT count(*) FROM \"" + table + "\";")
-			var count int64
-			err = row.Scan(&count)
+			validate(t)
+
+		})
+		t.Run("migrateTZ", func(t *testing.T) {
+			err = handler.migrateTIMESTAMP_TIMESTAMPTZ()
 			if err != nil {
 				t.Error(err)
 				return
 			}
-			if count != int64(1) {
-				t.Error("DeviceType Update deleted data")
-			}
-			row = handler.db.QueryRow("SELECT count(*) FROM \"" + table + "_ld\";")
-			err = row.Scan(&count)
+			row := handler.db.QueryRow("SELECT data_type FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time'AND table_name = '" + table + "';")
+			dataType := ""
+			err = row.Scan(&dataType)
 			if err != nil {
 				t.Error(err)
 				return
 			}
-			if count != int64(1) {
-				t.Error("DeviceType Update deleted data in view")
-			}
-			var val string
-			err = handler.db.QueryRow("SELECT \"measurements.measurement.value\" FROM \"" + table + "_ld\" ORDER BY time DESC LIMIT 1;").Scan(&val)
-			if err != nil {
-				t.Error(err)
+			if dataType != "timestamp with time zone" {
+				t.Errorf("time column not migrated, expected type 'timestamp with timezone', got '%v'", dataType)
 				return
 			}
-			if val != "0" {
-				t.Error("DeviceType Update wrong data in view")
-			}
-			row = handler.db.QueryRow("SELECT count(*) FROM \"" + table + "_fd\";")
-			err = row.Scan(&count)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			if count != int64(1) {
-				t.Error("DeviceType Update deleted data in view")
-			}
-			err = handler.db.QueryRow("SELECT \"measurements.measurement.value\" FROM \"" + table + "_fd\" ORDER BY time DESC LIMIT 1;").Scan(&val)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			if val != "0" {
-				t.Error("DeviceType Update wrong data in view")
-			}
-			ctx, cancel = context.WithTimeout(handler.ctx, 10*time.Minute)
-			defer cancel()
-			tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			fd, err := getFieldDescriptionsOfTable(table+"_ld", tx)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			slices.SortFunc(fd, func(a, b fieldDescription) int {
-				return strings.Compare(a.ColumnName, b.ColumnName)
-			})
-			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[0].DataType != "text" || fd[0].ColumnName != "\"measurements.measurement.value\"" {
-				t.Errorf("Expected different field descriptions:\n%#v\n", fd)
-				return
-			}
-			fd, err = getFieldDescriptionsOfTable(table+"_fd", tx)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			err = tx.Rollback()
-			if err != nil {
-				t.Error(err)
-				return
-			}
-			cancel()
-			slices.SortFunc(fd, func(a, b fieldDescription) int {
-				return strings.Compare(a.ColumnName, b.ColumnName)
-			})
-			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[0].DataType != "text" || fd[0].ColumnName != "\"measurements.measurement.value\"" {
-				t.Error("Expected different field descriptions")
-				return
-			}
+			validate(t)
+		})
+
+		t.Run("still writable", func(t *testing.T) {
 			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", \"measurements.measurement.value3\", time) VALUES (0, 1, '1970-01-01T00:00:00Z');")
 			if err != nil {
 				t.Error(err)

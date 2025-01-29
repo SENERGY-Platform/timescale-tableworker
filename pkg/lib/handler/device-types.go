@@ -284,90 +284,10 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 					}
 				}
 				for _, nt := range newType {
-					savepoint := "\"" + uuid.NewString() + "\""
-					_, err = tx.Exec("SAVEPOINT " + savepoint + ";")
+					tx, err = handler.handleColumnTypeChange(tx, table, nt, ctx, outdatedDeviceId)
 					if err != nil {
 						_ = tx.Rollback()
-						return errors.Join(baseError, err)
-					}
-					query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
-					if handler.debug {
-						log.Println("Executing:", query)
-					}
-					_, err = tx.Query(query)
-					if err != nil {
-						pqErr, ok := err.(*pq.Error)
-						if ok && pqErr.Code == "0A000" && pqErr.Message == "cannot alter type of a column used by a view or rule" {
-							if handler.debug {
-								log.Println("View is blocking change of column type, trying workaround")
-							}
-							_, err = tx.Exec("ROLLBACK TO SAVEPOINT " + savepoint + ";")
-							if err != nil {
-								_ = tx.Rollback()
-								return errors.Join(baseError, err)
-							}
-							fdCurrent, err := getFieldDescriptionsOfTable(table, tx)
-							if err != nil {
-								return errors.Join(baseError, errors.New("could not obtain field descriptions"), err)
-							}
-
-							fieldNamesCurrent := []string{}
-							for _, f := range fdCurrent {
-								fieldNamesCurrent = append(fieldNamesCurrent, f.ColumnName)
-							}
-
-							err = forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
-								_, err := handler.backupAndDropCA(outdatedDeviceId, viewSchema, viewName, viewDefinition, materializedOnly, tx)
-								if err != nil {
-									_ = tx.Rollback()
-									return err
-								}
-								return nil
-							})
-							if err != nil {
-								_ = tx.Rollback()
-								return errors.Join(baseError, err)
-							}
-							_, err = tx.Exec(query)
-							if err != nil {
-								return err
-							}
-							err = handler.forEachStoredBackup(outdatedDeviceId, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
-								err = createCA(viewSchema, viewName, viewDefinition, materializedOnly, tx)
-								if err != nil {
-									return err
-								}
-								return nil
-							})
-							if err != nil {
-								_ = tx.Rollback()
-								return errors.Join(baseError, err)
-							}
-							// TX Commit needed, because following insertBackupDataAndDrop will not find the hypertable otherwise.
-							// Since this might result in a partial update an ALL CAPS warning is printed and sent to dev notifications
-							err = tx.Commit()
-							if err != nil {
-								return errors.Join(errors.New("could not commit transaction"), err)
-							}
-							tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
-							if err != nil {
-								return errors.Join(errors.New("could not renew transaction, MIGHT NEED TO MANUALLY FIX WITH BACKUP DATA"), err)
-							}
-
-							err = handler.forEachStoredBackup(outdatedDeviceId, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
-
-								return handler.insertBackupDataAndDrop(viewSchema, viewName, backupTable, fieldNamesCurrent, tx)
-							})
-
-							if err != nil {
-								_ = tx.Rollback()
-								return errors.Join(baseError, err)
-							}
-
-						} else {
-							_ = tx.Rollback()
-							return errors.Join(baseError, errors.New("could not alter column type"), err)
-						}
+						errors.Join(baseError, err)
 					}
 				}
 				for _, nn := range setNotNull {
@@ -603,4 +523,91 @@ func (handler *Handler) insertBackupDataAndDrop(viewSchema, viewName, backupTabl
 		return errors.Join(errors.New("unable to delete backup info of table "+backupTable), err)
 	}
 	return nil
+}
+
+func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fieldDescription, ctx context.Context, identifier string) (*sql.Tx, error) {
+	savepoint := "\"" + uuid.NewString() + "\""
+	_, err := tx.Exec("SAVEPOINT " + savepoint + ";")
+	if err != nil {
+		_ = tx.Rollback()
+		return tx, err
+	}
+	query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
+	if handler.debug {
+		log.Println("Executing:", query)
+	}
+	_, err = tx.Query(query)
+	if err != nil {
+		pqErr, ok := err.(*pq.Error)
+		if ok && pqErr.Code == "0A000" && pqErr.Message == "cannot alter type of a column used by a view or rule" {
+			if handler.debug {
+				log.Println("View is blocking change of column type, trying workaround")
+			}
+			_, err = tx.Exec("ROLLBACK TO SAVEPOINT " + savepoint + ";")
+			if err != nil {
+				return tx, err
+			}
+			fdCurrent, err := getFieldDescriptionsOfTable(table, tx)
+			if err != nil {
+				return tx, errors.Join(errors.New("could not obtain field descriptions"), err)
+			}
+
+			fieldNamesCurrent := []string{}
+			for _, f := range fdCurrent {
+				fieldNamesCurrent = append(fieldNamesCurrent, f.ColumnName)
+			}
+
+			err = forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
+				_, err := handler.backupAndDropCA(identifier, viewSchema, viewName, viewDefinition, materializedOnly, tx)
+				if err != nil {
+					_ = tx.Rollback()
+					return err
+				}
+				return nil
+			})
+			if err != nil {
+				_ = tx.Rollback()
+				return tx, err
+			}
+			_, err = tx.Exec(query)
+			if err != nil {
+				return tx, err
+			}
+			err = handler.forEachStoredBackup(identifier, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
+				err = createCA(viewSchema, viewName, viewDefinition, materializedOnly, tx)
+				if err != nil {
+					return err
+				}
+				return nil
+			})
+			if err != nil {
+				_ = tx.Rollback()
+				return tx, err
+			}
+			// TX Commit needed, because following insertBackupDataAndDrop will not find the hypertable otherwise.
+			// Since this might result in a partial update an ALL CAPS warning is printed and sent to dev notifications
+			err = tx.Commit()
+			if err != nil {
+				return tx, errors.Join(errors.New("could not commit transaction"), err)
+			}
+			tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
+			if err != nil {
+				return tx, errors.Join(errors.New("could not renew transaction, MIGHT NEED TO MANUALLY FIX WITH BACKUP DATA"), err)
+			}
+
+			err = handler.forEachStoredBackup(identifier, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
+				return handler.insertBackupDataAndDrop(viewSchema, viewName, backupTable, fieldNamesCurrent, tx)
+			})
+
+			if err != nil {
+				_ = tx.Rollback()
+				return tx, err
+			}
+
+		} else {
+			_ = tx.Rollback()
+			return tx, errors.Join(errors.New("could not alter column type"), err)
+		}
+	}
+	return tx, nil
 }

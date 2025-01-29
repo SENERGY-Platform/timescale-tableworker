@@ -110,6 +110,13 @@ func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handl
 		devNotificationsClient: devNotifications.New(c.DevNotificationsUrl),
 	}
 	err = handler.initMetadataSchema()
+	if err != nil {
+		return nil, err
+	}
+	err = handler.migrate()
+	if err != nil {
+		return nil, err
+	}
 	return
 }
 
