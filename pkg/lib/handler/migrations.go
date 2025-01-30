@@ -18,6 +18,7 @@ package handler
 
 import (
 	"database/sql"
+	"log"
 )
 
 func (handler *Handler) migrate() error {
@@ -41,6 +42,9 @@ func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
 		if err != nil {
 			tx.Rollback()
 			return err
+		}
+		if handler.debug {
+			log.Println("Migrating " + table)
 		}
 		tx, err = handler.handleColumnTypeChange(tx, table, fieldDescription{
 			ColumnName: "time",
