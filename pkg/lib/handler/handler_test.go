@@ -367,11 +367,6 @@ func TestHandler(t *testing.T) {
 			return
 		}
 		table := "device:" + shortDeviceId + "_service:" + shortServiceId
-		_, err = handler.db.Exec("ALTER TABLE \"" + table + "\" ALTER COLUMN time TYPE TIMESTAMP") // create legacy time format
-		if err != nil {
-			t.Error(err)
-			return
-		}
 		validate := func(t *testing.T) {
 			row := handler.db.QueryRow("SELECT count(*) FROM \"" + table + "\";")
 			var count int64
@@ -458,7 +453,7 @@ func TestHandler(t *testing.T) {
 		}
 		t.Run("device type update", func(t *testing.T) {
 
-			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", \"measurements.measurement.value2\", time) VALUES (0, 1, '1970-01-01T00:00:00Z');")
+			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", \"measurements.measurement.value2\", time) VALUES (0, 1, '1970-01-01T00:00:00');")
 			if err != nil {
 				t.Error(err)
 				return
@@ -560,13 +555,45 @@ func TestHandler(t *testing.T) {
 
 		})
 		t.Run("migrateTZ", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(handler.ctx, 10*time.Minute)
+			defer cancel()
+			tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			tx, err = handler.handleColumnTypeChange(tx, table, fieldDescription{
+				ColumnName: "time",
+				Nullable:   false,
+				DataType:   "TIMESTAMP",
+			}, handler.ctx, table)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			err = tx.Commit()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+
+			row := handler.db.QueryRow("SELECT data_type FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time'AND table_name = '" + table + "';")
+			dataType := ""
+			err = row.Scan(&dataType)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if dataType != "timestamp without time zone" {
+				t.Error("time column migration test could not be run, timestamp is already with time zone")
+				return
+			}
 			err = handler.migrateTIMESTAMP_TIMESTAMPTZ()
 			if err != nil {
 				t.Error(err)
 				return
 			}
-			row := handler.db.QueryRow("SELECT data_type FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time'AND table_name = '" + table + "';")
-			dataType := ""
+			row = handler.db.QueryRow("SELECT data_type FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time'AND table_name = '" + table + "';")
 			err = row.Scan(&dataType)
 			if err != nil {
 				t.Error(err)

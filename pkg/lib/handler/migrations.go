@@ -31,12 +31,14 @@ func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
 		tx.Rollback()
 		return err
 	}
-	rows, err := tx.Query("SELECT distinct(table_name) FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time' AND data_type = 'timestamp without time zone' AND table_name ~ '^userid:.{22}_export:.{22}$' OR table_name ~ '^device:.{22}_service:.{22}$';")
+	i := 0
+	rows, err := handler.db.Query("SELECT distinct(table_name) FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time' AND data_type = 'timestamp without time zone' AND table_name ~ '^userid:.{22}_export:.{22}$' OR table_name ~ '^device:.{22}_service:.{22}$';")
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
 	for rows.Next() {
+		i++
 		table := ""
 		err = rows.Scan(&table)
 		if err != nil {
@@ -55,6 +57,18 @@ func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
 			tx.Rollback()
 			return err
 		}
+	}
+	err = rows.Err()
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+	if handler.debug {
+		log.Printf("Finished TIMESTAMPTZ migration, ran for %v tables\n", i)
 	}
 	return nil
 }
