@@ -27,7 +27,7 @@ func (handler *Handler) migrate() error {
 
 func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
 	i := 0
-	rows, err := handler.db.Query("SELECT distinct(table_name) FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time' AND data_type = 'timestamp without time zone' AND table_name ~ '^userid:.{22}_export:.{22}$' OR table_name ~ '^device:.{22}_service:.{22}$';")
+	rows, err := handler.db.Query("SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time' AND data_type = 'timestamp without time zone' AND (table_name ~ '^userid:.{22}_export:.{22}$' OR table_name ~ '^device:.{22}_service:.{22}$');")
 	if err != nil {
 		return err
 	}
