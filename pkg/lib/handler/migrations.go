@@ -26,19 +26,18 @@ func (handler *Handler) migrate() error {
 }
 
 func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
-	tx, err := handler.db.BeginTx(handler.ctx, &sql.TxOptions{})
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
 	i := 0
 	rows, err := handler.db.Query("SELECT distinct(table_name) FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time' AND data_type = 'timestamp without time zone' AND table_name ~ '^userid:.{22}_export:.{22}$' OR table_name ~ '^device:.{22}_service:.{22}$';")
 	if err != nil {
-		tx.Rollback()
 		return err
 	}
 	for rows.Next() {
 		i++
+		tx, err := handler.db.BeginTx(handler.ctx, &sql.TxOptions{})
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
 		table := ""
 		err = rows.Scan(&table)
 		if err != nil {
@@ -57,13 +56,12 @@ func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
 			tx.Rollback()
 			return err
 		}
+		err = tx.Commit()
+		if err != nil {
+			return err
+		}
 	}
 	err = rows.Err()
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	err = tx.Commit()
 	if err != nil {
 		return err
 	}
