@@ -20,7 +20,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
-	"log"
 	"sort"
 	"strings"
 )
@@ -66,7 +65,17 @@ func parseContentVariable(c devicetypes.ContentVariable, path string) []fieldDes
 			s = append(s, parseContentVariable(sub, prefix)...)
 		}
 	case devicetypes.List:
-		log.Println("WARN: creating fields for list type not supported yet, skipping!")
+		if len(c.SubContentVariables) > 0 && c.SubContentVariables[0].Name == "*" {
+			s = append(s, fieldDescription{
+				ColumnName: "\"" + prefix + "\"",
+				Nullable:   true,
+				DataType:   "JSONB",
+			})
+		} else {
+			for _, sub := range c.SubContentVariables {
+				s = append(s, parseContentVariable(sub, prefix)...)
+			}
+		}
 	}
 	return s
 }

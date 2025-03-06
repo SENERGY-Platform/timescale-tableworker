@@ -99,7 +99,6 @@ func TestHandler(t *testing.T) {
 	now := time.Unix(0, 0).UTC() //not really 'now', but a knowable one for testing
 
 	testDtPut := func(t *testing.T, dt models.DeviceType, currentTime time.Time) models.DeviceType {
-		dt.GenerateId()
 		timeout, _ := context.WithTimeout(context.Background(), 3*time.Second)
 		t.Run("device-repo", func(t *testing.T) {
 			err = deviceRepoDb.SetDeviceType(timeout, dt)
@@ -165,6 +164,7 @@ func TestHandler(t *testing.T) {
 
 	simpleDt := models.DeviceType{
 		Name:          "reduced-snowflake-canary-device-type",
+		Id:            "urn:infai:ses:device-type:2d9c189a-e7d9-4576-bdb9-a1f7b07e5eb6",
 		Description:   "used for canary service github.com/SENERGY-Platform/snowflake-canary",
 		DeviceClassId: "urn:infai:ses:device-class:997937d6-c5f3-4486-b67c-114675038393",
 		Attributes:    []models.Attribute{},
@@ -172,6 +172,7 @@ func TestHandler(t *testing.T) {
 			{
 				LocalId:     "cmd",
 				Name:        "cmd",
+				Id:          "urn:infai:ses:service:f08f5ea6-f45e-45ee-852e-7ac6664ba920",
 				Description: "canary cmd service, needed to test online state by subscription",
 				Interaction: models.REQUEST,
 				ProtocolId:  "urn:infai:ses:protocol:f3a63aeb-187e-4dd9-9ef5-d97a6eb6292b",
@@ -204,6 +205,7 @@ func TestHandler(t *testing.T) {
 			{
 				LocalId:     "sensor",
 				Name:        "sensor",
+				Id:          "urn:infai:ses:service:bdd2a9e2-32f4-4809-b779-67af13d4bf13",
 				Description: "canary sensor service, needed to test device data handling",
 				Interaction: models.EVENT_AND_REQUEST,
 				ProtocolId:  "urn:infai:ses:protocol:f3a63aeb-187e-4dd9-9ef5-d97a6eb6292b",
@@ -235,6 +237,84 @@ func TestHandler(t *testing.T) {
 										},
 									},
 								},
+								{
+									Name: "listvariable",
+									Type: models.List,
+									SubContentVariables: []models.ContentVariable{
+										{
+											Name: "*",
+											Type: models.Structure,
+											SubContentVariables: []models.ContentVariable{
+												{
+													Name:                 "value",
+													Type:                 models.Integer,
+													CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
+													FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
+													AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
+													SerializationOptions: []string{models.SerializationOptionXmlAttribute},
+												},
+												{
+													Name:                 "value2",
+													Type:                 models.Integer,
+													CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
+													FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
+													AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
+													SerializationOptions: []string{models.SerializationOptionXmlAttribute},
+												},
+											},
+										},
+									},
+								},
+								{
+									Name: "listfixed",
+									Type: models.List,
+									SubContentVariables: []models.ContentVariable{
+										{
+											Name: "0",
+											Type: models.Structure,
+											SubContentVariables: []models.ContentVariable{
+												{
+													Name:                 "value",
+													Type:                 models.Integer,
+													CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
+													FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
+													AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
+													SerializationOptions: []string{models.SerializationOptionXmlAttribute},
+												},
+												{
+													Name:                 "value2",
+													Type:                 models.Integer,
+													CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
+													FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
+													AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
+													SerializationOptions: []string{models.SerializationOptionXmlAttribute},
+												},
+											},
+										},
+										{
+											Name: "1",
+											Type: models.Structure,
+											SubContentVariables: []models.ContentVariable{
+												{
+													Name:                 "value",
+													Type:                 models.Integer,
+													CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
+													FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
+													AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
+													SerializationOptions: []string{models.SerializationOptionXmlAttribute},
+												},
+												{
+													Name:                 "value2",
+													Type:                 models.Integer,
+													CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
+													FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
+													AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
+													SerializationOptions: []string{models.SerializationOptionXmlAttribute},
+												},
+											},
+										},
+									},
+								},
 							},
 						},
 						Serialization:     models.XML,
@@ -256,6 +336,7 @@ func TestHandler(t *testing.T) {
 	t.Run("multi-part device-type creation", func(t *testing.T) {
 		multiPartDt = testDtPut(t, models.DeviceType{
 			Name:          "snowflake-canary-device-type",
+			Id:            "urn:infai:ses:device-type:902760cc-7efd-47b6-acb3-2170e7fb780c",
 			Description:   "used for canary service github.com/SENERGY-Platform/snowflake-canary",
 			DeviceClassId: "urn:infai:ses:device-class:997937d6-c5f3-4486-b67c-114675038393",
 			Attributes:    []models.Attribute{},
@@ -263,6 +344,7 @@ func TestHandler(t *testing.T) {
 				{
 					LocalId:     "cmd",
 					Name:        "cmd",
+					Id:          "urn:infai:ses:service:f08f5ea6-f45e-45ee-852e-7ac6664ba920",
 					Description: "canary cmd service, needed to test online state by subscription",
 					Interaction: models.REQUEST,
 					ProtocolId:  "urn:infai:ses:protocol:f3a63aeb-187e-4dd9-9ef5-d97a6eb6292b",
@@ -305,6 +387,7 @@ func TestHandler(t *testing.T) {
 				{
 					LocalId:     "sensor",
 					Name:        "sensor",
+					Id:          "urn:infai:ses:service:bdd2a9e2-32f4-4809-b779-67af13d4bf13",
 					Description: "canary sensor service, needed to test device data handling",
 					Interaction: models.EVENT_AND_REQUEST,
 					ProtocolId:  "urn:infai:ses:protocol:f3a63aeb-187e-4dd9-9ef5-d97a6eb6292b",
@@ -428,7 +511,7 @@ func TestHandler(t *testing.T) {
 			slices.SortFunc(fd, func(a, b fieldDescription) int {
 				return strings.Compare(a.ColumnName, b.ColumnName)
 			})
-			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[0].DataType != "text" || fd[0].ColumnName != "\"measurements.measurement.value\"" {
+			if len(fd) != 8 || fd[1].DataType != "bigint" || fd[6].ColumnName != "\"measurements.measurement.value3\"" || fd[5].DataType != "text" || fd[5].ColumnName != "\"measurements.measurement.value\"" {
 				t.Errorf("Expected different field descriptions:\n%#v\n", fd)
 				return
 			}
@@ -446,14 +529,14 @@ func TestHandler(t *testing.T) {
 			slices.SortFunc(fd, func(a, b fieldDescription) int {
 				return strings.Compare(a.ColumnName, b.ColumnName)
 			})
-			if len(fd) != 3 || fd[1].DataType != "bigint" || fd[1].ColumnName != "\"measurements.measurement.value3\"" || fd[0].DataType != "text" || fd[0].ColumnName != "\"measurements.measurement.value\"" {
-				t.Error("Expected different field descriptions")
+			if len(fd) != 8 || fd[6].DataType != "bigint" || fd[6].ColumnName != "\"measurements.measurement.value3\"" || fd[5].DataType != "text" || fd[5].ColumnName != "\"measurements.measurement.value\"" {
+				t.Errorf("Expected different field descriptions:\n%#v\n", fd)
 				return
 			}
 		}
 		t.Run("device type update", func(t *testing.T) {
 
-			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", \"measurements.measurement.value2\", time) VALUES (0, 1, '1970-01-01T00:00:00');")
+			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", \"measurements.measurement.value2\", \"measurements.listvariable\", \"measurements.listfixed.0.value\", \"measurements.listfixed.0.value2\", \"measurements.listfixed.1.value\", \"measurements.listfixed.1.value2\", time) VALUES (0, 1, '[{\"value\": 12, \"value2\": 34}, {\"value\": 56, \"value2\": 78}, {\"value\": 90, \"value2\": 12}]', 12, 34, 56, 78, '1970-01-01T00:00:00');") // this tests correct column creation
 			if err != nil {
 				t.Error(err)
 				return
@@ -463,7 +546,12 @@ func TestHandler(t *testing.T) {
 				"SELECT " +
 				"time_bucket(INTERVAL '1 day', time) AS time, " +
 				"last(\"measurements.measurement.value\", time) AS \"measurements.measurement.value\", " +
-				"last(\"measurements.measurement.value2\", time) AS \"measurements.measurement.value2\" " +
+				"last(\"measurements.measurement.value2\", time) AS \"measurements.measurement.value2\", " +
+				"last(\"measurements.listfixed.0.value\", time) AS \"measurements.listfixed.0.value\", " +
+				"last(\"measurements.listfixed.0.value2\", time) AS \"measurements.listfixed.0.value2\", " +
+				"last(\"measurements.listfixed.1.value\", time) AS \"measurements.listfixed.1.value\", " +
+				"last(\"measurements.listfixed.1.value2\", time) AS \"measurements.listfixed.1.value2\", " +
+				"last(\"measurements.listvariable\", time) AS \"measurements.listvariable\" " +
 				"FROM \"" + table + "\" " +
 				"GROUP BY  time_bucket(INTERVAL '1 day', time) " +
 				"WITH NO DATA;")
@@ -481,7 +569,12 @@ func TestHandler(t *testing.T) {
 				"SELECT " +
 				"time_bucket(INTERVAL '1 day', time) AS time, " +
 				"first(\"measurements.measurement.value\", time) AS \"measurements.measurement.value\", " +
-				"first(\"measurements.measurement.value2\", time) AS \"measurements.measurement.value2\" " +
+				"first(\"measurements.measurement.value2\", time) AS \"measurements.measurement.value2\", " +
+				"first(\"measurements.listfixed.0.value\", time) AS \"measurements.listfixed.0.value\", " +
+				"first(\"measurements.listfixed.0.value2\", time) AS \"measurements.listfixed.0.value2\", " +
+				"first(\"measurements.listfixed.1.value\", time) AS \"measurements.listfixed.1.value\", " +
+				"first(\"measurements.listfixed.1.value2\", time) AS \"measurements.listfixed.1.value2\", " +
+				"first(\"measurements.listvariable\", time) AS \"measurements.listvariable\" " +
 				"FROM \"" + table + "\" " +
 				"GROUP BY  time_bucket(INTERVAL '1 day', time) " +
 				"WITH NO DATA;")
@@ -493,11 +586,6 @@ func TestHandler(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 				return
-			}
-			if simpleDt.Services[1].Outputs[0].ContentVariable.SubContentVariables[0].SubContentVariables[0].Name != "value" { // sometimes thew order has changed...
-				t := simpleDt.Services[1].Outputs[0].ContentVariable.SubContentVariables[0].SubContentVariables[0]
-				simpleDt.Services[1].Outputs[0].ContentVariable.SubContentVariables[0].SubContentVariables[0] = simpleDt.Services[1].Outputs[0].ContentVariable.SubContentVariables[0].SubContentVariables[1]
-				simpleDt.Services[1].Outputs[0].ContentVariable.SubContentVariables[0].SubContentVariables[1] = t
 			}
 			ctx, cancel := context.WithTimeout(handler.ctx, 10*time.Minute)
 			defer cancel()
@@ -607,7 +695,7 @@ func TestHandler(t *testing.T) {
 		})
 
 		t.Run("still writable", func(t *testing.T) {
-			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", \"measurements.measurement.value3\", time) VALUES (0, 1, '1970-01-01T00:00:00Z');")
+			_, err = handler.db.Exec("INSERT INTO \"" + table + "\"(\"measurements.measurement.value\", \"measurements.measurement.value3\", \"measurements.listvariable\", \"measurements.listfixed.0.value\", \"measurements.listfixed.0.value2\", \"measurements.listfixed.1.value\", \"measurements.listfixed.1.value2\", time) VALUES (0, 1, '[{\"value\": 12, \"value2\": 34}, {\"value\": 56, \"value2\": 78}, {\"value\": 90, \"value2\": 12}]', 12, 34, 56, 78, '1970-01-01T00:00:00Z');")
 			if err != nil {
 				t.Error(err)
 				return
