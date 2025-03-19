@@ -3,9 +3,7 @@
   "KafkaTopicDevices": "devices",
   "KafkaTopicDeviceTypes": "device-types",
   "KafkaTopicTableUpdates": "timescale-table-updates",
-  "KafkaOffset": "earliest",
   "KafkaGroupId": "timescale-tableworker",
-  "KafkaCommitMessages": true,
 
   "PostgresHost": "localhost",
   "PostgresPort": 5432,
@@ -20,6 +18,6 @@
   "DeviceManagerUrl": "http://device-manager:8080",
 
   "DevNotificationsUrl": "http://api.developer-notifications:8080",
-
+  "SyncOnStartup": false,
   "Debug": false
 }

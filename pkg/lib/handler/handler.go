@@ -24,7 +24,7 @@ import (
 	devNotifications "github.com/SENERGY-Platform/developer-notifications/pkg/client"
 	"github.com/SENERGY-Platform/developer-notifications/pkg/model"
 	"github.com/SENERGY-Platform/device-repository/lib/client"
-	"github.com/SENERGY-Platform/models/go/models"
+	deviceRepo "github.com/SENERGY-Platform/device-repository/lib/client"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/kafka"
 	_ "github.com/lib/pq"
@@ -38,7 +38,7 @@ type Handler struct {
 	db                     *sql.DB
 	distributed            bool
 	replication            string
-	deviceRepo             DeviceRepo
+	deviceRepo             deviceRepo.Interface
 	debug                  bool
 	ctx                    context.Context
 	conf                   config.Config
@@ -64,10 +64,6 @@ const (
 
 type Publisher interface {
 	Publish(topic string, msg string) error
-}
-
-type DeviceRepo interface {
-	ReadDeviceType(id string, token string) (result models.DeviceType, err error, errCode int)
 }
 
 func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handler *Handler, err error) {

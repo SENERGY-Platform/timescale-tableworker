@@ -22,25 +22,25 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
 	"log"
 	"strings"
 	"time"
-)
 
-type device struct {
-	Id           string `json:"id"`
-	LocalId      string `json:"local_id"`
-	Name         string `json:"name"`
-	DeviceTypeId string `json:"device_type_id"`
-}
+	"github.com/SENERGY-Platform/models/go/models"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
+)
 
 type deviceCommand struct {
 	Command devicetypes.Command `json:"command"`
 	Id      string              `json:"id"`
 	Owner   string              `json:"owner"`
-	Device  device              `json:"device"`
+	Device  models.Device       `json:"device"`
 }
+
+// token is expired and invalid. but because this service does not validate the received tokens,
+// it may be used by trusted internal services which are within the same network (kubernetes cluster).
+// requests with this token may not be routed over an ingres with token validation
+const token = `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjEwMDAwMDAwMDAsImlhdCI6MTAwMDAwMDAwMCwiYXV0aF90aW1lIjoxMDAwMDAwMDAwLCJpc3MiOiJpbnRlcm5hbCIsImF1ZCI6W10sInN1YiI6ImRkNjllYTBkLWY1NTMtNDMzNi04MGYzLTdmNDU2N2Y4NWM3YiIsInR5cCI6IkJlYXJlciIsImF6cCI6ImZyb250ZW5kIiwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImFkbWluIiwiZGV2ZWxvcGVyIiwidXNlciJdfSwicmVzb3VyY2VfYWNjZXNzIjp7Im1hc3Rlci1yZWFsbSI6eyJyb2xlcyI6W119LCJCYWNrZW5kLXJlYWxtIjp7InJvbGVzIjpbXX0sImFjY291bnQiOnsicm9sZXMiOltdfX0sInJvbGVzIjpbImFkbWluIiwiZGV2ZWxvcGVyIiwidXNlciJdLCJuYW1lIjoiU2VwbCBBZG1pbiIsInByZWZlcnJlZF91c2VybmFtZSI6InNlcGwiLCJnaXZlbl9uYW1lIjoiU2VwbCIsImxvY2FsZSI6ImVuIiwiZmFtaWx5X25hbWUiOiJBZG1pbiIsImVtYWlsIjoic2VwbEBzZXBsLmRlIn0.HZyG6n-BfpnaPAmcDoSEh0SadxUx-w4sEt2RVlQ9e5I`
 
 func (handler *Handler) handleDeviceMessage(msg []byte, t time.Time) error {
 	var cmd deviceCommand
@@ -60,11 +60,7 @@ func (handler *Handler) handleDeviceMessage(msg []byte, t time.Time) error {
 	}
 }
 
-func (handler *Handler) createDevice(d device, t time.Time) error {
-	// John Doe token, without real user info
-	// invalid for requests from outside the cluster
-	// is only usable because we query the service directly without kong
-	token := "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+func (handler *Handler) createDevice(d models.Device, t time.Time) error {
 	dt, err, _ := handler.deviceRepo.ReadDeviceType(d.DeviceTypeId, token)
 	if err != nil {
 		log.Println("Could not get device type", err)

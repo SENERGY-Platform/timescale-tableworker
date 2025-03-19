@@ -31,9 +31,7 @@ type Config struct {
 	KafkaTopicDevices      string
 	KafkaTopicDeviceTypes  string
 	KafkaTopicTableUpdates string
-	KafkaOffset            string
 	KafkaGroupId           string
-	KafkaCommitMessages    bool
 
 	PostgresHost              string `json:"PostgresHost"`
 	PostgresPort              int    `json:"PostgresPort"`
@@ -48,6 +46,8 @@ type Config struct {
 	DeviceManagerUrl string `json:"DeviceManagerUrl"`
 
 	DevNotificationsUrl string `json:"DevNotificationsUrl"`
+
+	SyncOnStartup bool `json:"SyncOnStartup"`
 
 	Debug bool
 }

@@ -35,23 +35,22 @@ func Start(ctx context.Context, conf config.Config) (wg *sync.WaitGroup, err err
 		return wg, err
 	}
 
-	var offset int64
-	switch conf.KafkaOffset {
-	case "latest", "largest":
-		offset = kafka.Latest
-		break
-	case "earliest", "smallest":
-		offset = kafka.Earliest
-		break
-	default:
-		log.Println("WARN: Unknown kafka offset. Use 'latest/largest' or 'earliest/smallest'. Using latest")
-		offset = kafka.Latest
-	}
-	_, err = kafka.NewConsumer(ctx, wg, conf.KafkaBootstrap, []string{conf.KafkaTopicDevices, conf.KafkaTopicDeviceTypes}, conf.KafkaGroupId, offset, myHandler.HandleMessage, myHandler.HandleError, conf.Debug, conf.KafkaCommitMessages)
+	consumer, needsSync, err := kafka.NewConsumer(ctx, wg, conf.KafkaBootstrap, []string{conf.KafkaTopicDevices, conf.KafkaTopicDeviceTypes}, conf.KafkaGroupId, myHandler.HandleMessage, myHandler.HandleError, conf.Debug)
 	if err != nil {
 		log.Fatal("ERROR: unable to start kafka connection ", err)
 		return wg, err
 	}
 
+	if conf.SyncOnStartup || needsSync {
+		err = myHandler.FullSync()
+		if err != nil {
+			return wg, err
+		}
+	}
+
+	err = consumer.Start()
+	if err != nil {
+		return wg, err
+	}
 	return
 }

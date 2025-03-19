@@ -142,7 +142,7 @@ func TestHandler(t *testing.T) {
 				Command: devicetypes.PutCommand,
 				Id:      d.Id,
 				Owner:   "test",
-				Device: device{
+				Device: models.Device{
 					Id:           d.Id,
 					LocalId:      d.LocalId,
 					Name:         d.Name,
