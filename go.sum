@@ -10,10 +10,16 @@ github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
+github.com/SENERGY-Platform/api-docs-provider/lib/client v0.0.1 h1:AkY+Z4B2guyhYHM7nlWJT0NUene0rkfFTL4PXSBaxyo=
+github.com/SENERGY-Platform/api-docs-provider/lib/client v0.0.1/go.mod h1:KTSLI0Djg4YTKw4K2n+KCI4Xb9eWd2Ig7IOKie+p/Uw=
+github.com/SENERGY-Platform/api-docs-provider/lib/models v0.0.1 h1:5H1853zOVN6jjUTgRwfslPMGq/VY5PnbJDjxfSuKg6g=
+github.com/SENERGY-Platform/api-docs-provider/lib/models v0.0.1/go.mod h1:tTT3GhSD1Zue/L+HmHbr9YH+gPKLQVcYcnrbwrPcPFg=
 github.com/SENERGY-Platform/developer-notifications v0.0.4 h1:SmblhfWavNhE1mDxzrkhmWl2AoPPqKD+7YcZCQ7a5Tg=
 github.com/SENERGY-Platform/developer-notifications v0.0.4/go.mod h1:8yJrYnAYMtPEPy89ULw8ivgG8orVhSnaLgyfDt0bdgg=
 github.com/SENERGY-Platform/device-repository v0.1.52 h1:JedGhrK3dm0x693jHAPgsn85iO9esjxJz9zgdyt/nis=
 github.com/SENERGY-Platform/device-repository v0.1.52/go.mod h1:36pibGmG2igxgydf+deII/wiP1gWxF2/bgijDzwRriY=
+github.com/SENERGY-Platform/go-base-http-client v0.1.0 h1:PUiZVEj7/cMSZJ0g5G611tjY9bSh1Eby+tcktrgpiZ0=
+github.com/SENERGY-Platform/go-base-http-client v0.1.0/go.mod h1:NfKW/relIVTkMXhz4OqZlzJXYPQUYEKxwqou8D0B/Kw=
 github.com/SENERGY-Platform/models/go v0.0.0-20241007061544-de7132ae94e4 h1:zS65f1cmjAoBQUA432nmJl2TXAwqqqJMz7sp2DHLAGc=
 github.com/SENERGY-Platform/models/go v0.0.0-20241007061544-de7132ae94e4/go.mod h1:bCREPNRN4P8oxLgpC3/ZKK4jXSy4MSPXoiomhohE+aw=
 github.com/SENERGY-Platform/permissions-v2 v0.0.27 h1:4Sf5zNW0KMrSSJrv90MmyKD5RMnS8CT26yE7W9Za/x0=

@@ -47,6 +47,8 @@ type Config struct {
 
 	DevNotificationsUrl string `json:"DevNotificationsUrl"`
 
+	ApiDocsProviderBaseUrl string `json:"ApiDocsProviderBaseUrl"`
+
 	SyncOnStartup bool `json:"SyncOnStartup"`
 
 	Debug bool

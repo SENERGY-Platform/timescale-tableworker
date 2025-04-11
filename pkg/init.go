@@ -18,16 +18,20 @@ package pkg
 
 import (
 	"context"
-	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
-	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/handler"
-	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/kafka"
 	"log"
 	"runtime/debug"
 	"sync"
+
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/api_doc"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/handler"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/kafka"
 )
 
 func Start(ctx context.Context, conf config.Config) (wg *sync.WaitGroup, err error) {
 	wg = &sync.WaitGroup{}
+
+	go api_doc.PublishAsyncapiDoc(conf)
 
 	myHandler, err := handler.NewHandler(conf, wg, ctx)
 	if err != nil {

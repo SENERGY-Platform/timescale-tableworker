@@ -1,0 +1,78 @@
+{
+    "asyncapi": "3.0.0",
+    "info": {
+      "title": "Timescale Tableworker",
+      "version": ""
+    },
+    "servers": {
+      "kafka": {
+        "host": "kafka.kafka:9092",
+        "description": "Kafka broker.",
+        "protocol": "kafka"
+      }
+    },
+    "channels": {
+      "tableUpdates": {
+        "address": "timescale-table-updates",
+        "title": "Timescale Tables Updaes",
+        "description": "Publishes a message whenever the tableworker updates, creates or deletes a table.",
+        "servers": [
+          {
+            "$ref": "#/servers/kafka"
+          }
+        ],
+        "messages": {
+          "TableUpdate": {
+            "title": "Table Update",
+            "description": "List of updated tables.",
+            "payload": {
+              "$ref": "#/components/schemas/TableEditMessage"
+            }
+          }
+        }
+      }
+    },
+    "operations": {
+      "TableUpdate": {
+        "action": "send",
+        "channel": {
+          "$ref": "#/channels/tableUpdates"
+        },
+        "messages": [
+          {
+            "$ref": "#/channels/tableUpdates/messages/TableUpdate"
+          }
+        ]
+      }
+    },
+    "components": {
+      "schemas": {
+        "TableEditMessage": {
+          "title": "TableEditMessage",
+          "type": "object",
+          "required": [
+            "method",
+            "tables"
+          ],
+          "properties": {
+            "method": {
+              "type": "string",
+              "description": "Action performed on the tables",
+              "enum": [
+                "put",
+                "delete"
+              ]
+            },
+            "tables": {
+              "type": "array",
+              "description": "List of changed tables.",
+              "items": {
+                "type": "string",
+                "description": "Table name"
+              }
+            }
+          }
+        }
+      }
+    }
+  }

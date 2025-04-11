@@ -18,6 +18,7 @@
   "DeviceManagerUrl": "http://device-manager:8080",
 
   "DevNotificationsUrl": "http://api.developer-notifications:8080",
+  "ApiDocsProviderBaseUrl": "http://api.swagger:5000",
   "SyncOnStartup": false,
   "Debug": false
 }

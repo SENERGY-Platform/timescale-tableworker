@@ -1,8 +1,8 @@
 module github.com/SENERGY-Platform/timescale-tableworker
 
-go 1.23
+go 1.24
 
-toolchain go1.23.4
+toolchain go1.24.2
 
 require (
 	github.com/SENERGY-Platform/developer-notifications v0.0.4
@@ -15,11 +15,17 @@ require (
 )
 
 require (
+	github.com/SENERGY-Platform/api-docs-provider/lib/models v0.0.1 // indirect
+	github.com/SENERGY-Platform/go-base-http-client v0.1.0 // indirect
+)
+
+require (
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
 	github.com/IBM/sarama v1.43.3 // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/SENERGY-Platform/api-docs-provider/lib/client v0.0.1
 	github.com/SENERGY-Platform/permissions-v2 v0.0.27 // indirect
 	github.com/SENERGY-Platform/service-commons v0.0.0-20240813072046-91b3195dd8fc // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
