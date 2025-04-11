@@ -14,6 +14,7 @@ WORKDIR /root/
 COPY --from=builder /go/src/app/app .
 COPY --from=builder /go/src/app/config.json .
 COPY --from=builder /go/src/app/version.txt .
+COPY --from=builder /go/src/app/docs docs
 
 EXPOSE 8080
 
