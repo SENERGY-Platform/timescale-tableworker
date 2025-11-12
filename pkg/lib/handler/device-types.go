@@ -37,6 +37,8 @@ import (
 
 var caTypeRx = regexp.MustCompile(`,.*,\s+(.*\()`)
 
+var timeout = 4 * time.Hour
+
 func (handler *Handler) handleDeviceTypeMessage(msg []byte, t time.Time) error {
 	var cmd devicetypes.DeviceTypeCommand
 	err := json.Unmarshal(msg, &cmd)
@@ -118,7 +120,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				if handler.debug {
 					log.Printf("Table exists already, updating now %v\n", table)
 				}
-				ctx, cancel := context.WithTimeout(handler.ctx, 10*time.Minute)
+				ctx, cancel := context.WithTimeout(handler.ctx, timeout)
 				defer cancel() // cancel is also called at the end of the loop, deferring it in case of an early return
 				tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
 				if err != nil {
