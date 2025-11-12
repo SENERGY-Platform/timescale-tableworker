@@ -41,7 +41,7 @@ func Timescale(ctx context.Context, wg *sync.WaitGroup) (host string, port int, 
 		i++
 		c, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 			ContainerRequest: testcontainers.ContainerRequest{
-				Image:           "timescale/timescaledb-ha:pg13.15-ts2.15.3",
+				Image:           "timescale/timescaledb-ha:pg17-ts2.22",
 				Tmpfs:           map[string]string{},
 				WaitingFor:      wait.ForListeningPort("5432/tcp"),
 				ExposedPorts:    []string{"5432/tcp"},
