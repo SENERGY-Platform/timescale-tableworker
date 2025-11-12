@@ -176,6 +176,10 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 						}
 						return nil
 					})
+					if err != nil {
+						return errors.Join(fmt.Errorf("could not backup CAs for table %s", table), err)
+					}
+
 					// TX Commit needed, because following insertBackupDataAndDrop will not find the hypertable otherwise.
 					// Since this might result in a partial update an ALL CAPS warning is printed and sent to dev notifications
 					err = tx.Commit()
