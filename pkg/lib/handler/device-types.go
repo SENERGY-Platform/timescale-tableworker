@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -501,11 +502,12 @@ func (handler *Handler) insertBackupDataAndDrop(viewSchema, viewName, backupTabl
 	backupTableError := errors.New("MIGHT NEED TO MANUALLY FIX WITH BACKUP DATA FROM " + backupTable)
 
 	// Need to find the underyling hypertable of the view to insert the backup data
-	row := tx.QueryRow("SELECT materialization_hypertable_schema, materialization_hypertable_name FROM timescaledb_information.continuous_aggregates WHERE view_schema = '" + viewSchema + "' AND view_name = '" + viewName + "';")
+	query := "SELECT materialization_hypertable_schema, materialization_hypertable_name FROM timescaledb_information.continuous_aggregates WHERE view_schema = '" + viewSchema + "' AND view_name = '" + viewName + "';"
+	row := tx.QueryRow(query)
 	var materialization_hypertable_schema, materialization_hypertable_name string
 	err = row.Scan(&materialization_hypertable_schema, &materialization_hypertable_name)
 	if err != nil {
-		return errors.Join(backupTableError, err)
+		return errors.Join(backupTableError, err, fmt.Errorf("query: %s", query), fmt.Errorf("stack: %s", debug.Stack()))
 	}
 
 	fields := strings.Join(fieldNames, ", ")
