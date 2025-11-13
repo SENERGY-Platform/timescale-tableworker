@@ -126,6 +126,10 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				if err != nil {
 					return errors.Join(baseError, errors.New("could not create transaction"), err)
 				}
+				err = handler.lockExclusive(tx, "", table)
+				if err != nil {
+					return errors.Join(baseError, fmt.Errorf("could not lock table %s", table), err)
+				}
 				fdBeforeAllChanges, err := getFieldDescriptionsOfTable(table, tx)
 				if err != nil {
 					return errors.Join(baseError, errors.New("could not obtain field descriptions"), err)
@@ -149,6 +153,13 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 					if err != nil {
 						_ = tx.Rollback()
 						return errors.Join(baseError, errors.New("could not execute query "+query), err)
+					}
+
+					err = forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
+						return handler.lockExclusive(tx, viewSchema, viewName)
+					})
+					if err != nil {
+						return errors.Join(baseError, fmt.Errorf("could not lock ca"), err)
 					}
 
 					err = forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
@@ -189,6 +200,12 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 					tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
 					if err != nil {
 						return errors.Join(errors.New("could not renew transaction, MIGHT NEED TO MANUALLY FIX WITH BACKUP DATA"), err)
+					}
+					err = handler.forEachStoredBackup(outdatedDeviceId, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
+						return handler.lockExclusive(tx, viewSchema, viewName)
+					})
+					if err != nil {
+						return errors.Join(baseError, fmt.Errorf("could not lock ca"), err)
 					}
 
 					err = handler.forEachStoredBackup(outdatedDeviceId, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
@@ -271,6 +288,12 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 							tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
 							if err != nil {
 								return errors.Join(errors.New("could not renew transaction, MIGHT NEED TO MANUALLY FIX WITH BACKUP DATA"), err)
+							}
+							err = handler.forEachStoredBackup(outdatedDeviceId, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
+								return handler.lockExclusive(tx, viewSchema, viewName)
+							})
+							if err != nil {
+								return errors.Join(baseError, fmt.Errorf("could not lock ca"), err)
 							}
 							err = handler.forEachStoredBackup(outdatedDeviceId, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
 								err = handler.insertBackupDataAndDrop(viewSchema, viewName, backupTable, fieldNamesAfterThisRm, tx)
@@ -602,6 +625,12 @@ func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fiel
 			if err != nil {
 				return tx, errors.Join(errors.New("could not renew transaction, MIGHT NEED TO MANUALLY FIX WITH BACKUP DATA"), err)
 			}
+			err = handler.forEachStoredBackup(identifier, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
+				return handler.lockExclusive(tx, viewSchema, viewName)
+			})
+			if err != nil {
+				return tx, errors.Join(fmt.Errorf("could not lock ca"), err)
+			}
 
 			err = handler.forEachStoredBackup(identifier, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
 				return handler.insertBackupDataAndDrop(viewSchema, viewName, backupTable, fieldNamesCurrent, tx)
@@ -618,4 +647,20 @@ func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fiel
 		}
 	}
 	return tx, nil
+}
+
+func (handler *Handler) lockExclusive(tx *sql.Tx, schema string, table string) error {
+	fqn := "\"" + table + "\""
+	if schema != "" {
+		fqn = "\"" + schema + "\"." + fqn
+	}
+	query := "LOCK " + fqn + " in ACCESS EXCLUSIVE MODE;"
+	if handler.debug {
+		log.Println(query)
+	}
+	_, err := tx.Exec(query)
+	if err != nil {
+		return err
+	}
+	return nil
 }
