@@ -262,6 +262,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 					return errors.Join(baseError, errors.New("could not commit"), err)
 				}
 			}
+			util.Logger.Debug("Finished update for table " + table)
 			created = append(created, table)
 		}
 		err = handler.upsertServiceMeta(service.Id, newHash, t)
