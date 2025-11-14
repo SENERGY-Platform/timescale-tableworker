@@ -21,17 +21,18 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
+	"sync"
+	"time"
+
 	devNotifications "github.com/SENERGY-Platform/developer-notifications/pkg/client"
 	"github.com/SENERGY-Platform/developer-notifications/pkg/model"
 	"github.com/SENERGY-Platform/device-repository/lib/client"
 	deviceRepo "github.com/SENERGY-Platform/device-repository/lib/client"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/kafka"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 	_ "github.com/lib/pq"
-	"log"
-	"strconv"
-	"sync"
-	"time"
 )
 
 type Handler struct {
@@ -39,7 +40,6 @@ type Handler struct {
 	distributed            bool
 	replication            string
 	deviceRepo             deviceRepo.Interface
-	debug                  bool
 	ctx                    context.Context
 	conf                   config.Config
 	producer               Publisher
@@ -69,7 +69,7 @@ type Publisher interface {
 func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handler *Handler, err error) {
 	psqlconn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable", c.PostgresHost,
 		c.PostgresPort, c.PostgresUser, c.PostgresPw, c.PostgresDb)
-	log.Println("Connecting to PSQL...", psqlconn)
+	util.Logger.Info("Connecting to PSQL..." + psqlconn)
 	// open database
 	db, err := sql.Open("postgres", psqlconn)
 	if err != nil {
@@ -99,7 +99,6 @@ func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handl
 		distributed:            c.UseDistributedHypertables,
 		replication:            strconv.Itoa(c.HypertableReplicationFactor),
 		deviceRepo:             client.NewClient(c.DeviceManagerUrl, nil),
-		debug:                  c.Debug,
 		ctx:                    ctx,
 		conf:                   c,
 		producer:               producer,
@@ -128,7 +127,7 @@ func (handler *Handler) HandleMessage(topic string, msg []byte, t time.Time) err
 }
 
 func (handler *Handler) HandleError(err error, _ *kafka.Consumer) {
-	log.Println(err)
+	util.Logger.Error(err.Error())
 	sendErr := handler.devNotificationsClient.SendMessage(model.Message{
 		Sender: "timescale-tableworker",
 		Title:  "Error handling table updates",
@@ -136,15 +135,14 @@ func (handler *Handler) HandleError(err error, _ *kafka.Consumer) {
 		Tags:   nil,
 	})
 	if sendErr != nil {
-		log.Println("WARNING: Could not send developer-notification: " + sendErr.Error())
+		util.Logger.Warn("Could not send developer-notification: " + sendErr.Error())
 	}
 }
 
 func (handler *Handler) initMetadataSchema() error {
 	query := "CREATE SCHEMA IF NOT EXISTS " + handler.conf.PostgresTableworkerSchema + ";"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
+
 	_, err := handler.db.Exec(query)
 	if err != nil {
 		return err
@@ -155,9 +153,8 @@ func (handler *Handler) initMetadataSchema() error {
 		fieldHash + " text NOT NULL, " +
 		fieldTime + " TIMESTAMP NOT NULL" +
 		");"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
+
 	_, err = handler.db.Exec(query)
 	if err != nil {
 		return err
@@ -168,9 +165,8 @@ func (handler *Handler) initMetadataSchema() error {
 		fieldDeviceId + " text PRIMARY KEY, " +
 		fieldTime + " TIMESTAMP NOT NULL" +
 		");"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
+
 	_, err = handler.db.Exec(query)
 	if err != nil {
 		return err
@@ -185,9 +181,8 @@ func (handler *Handler) initMetadataSchema() error {
 		fieldMaterializedOnly + " bool NOT NULL, " +
 		"PRIMARY KEY (" + fieldDeviceId + ", " + fieldViewSchema + ", " + fieldViewName + ")" +
 		");"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
+
 	_, err = handler.db.Exec(query)
 	if err != nil {
 		return err

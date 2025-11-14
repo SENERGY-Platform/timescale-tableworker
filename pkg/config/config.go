@@ -18,12 +18,13 @@ package config
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 )
 
 type Config struct {
@@ -58,13 +59,13 @@ type Config struct {
 func LoadConfig(location string) (config Config, err error) {
 	file, err2 := os.Open(location)
 	if err2 != nil {
-		log.Println("error on config load: ", err2)
+		util.Logger.Error("error on config load: " + err2.Error())
 		return config, err2
 	}
 	decoder := json.NewDecoder(file)
 	err2 = decoder.Decode(&config)
 	if err2 != nil {
-		log.Println("invalid config json: ", err2)
+		util.Logger.Error("invalid config json: " + err2.Error())
 		return config, err2
 	}
 	handleEnvironmentVars(&config)
@@ -97,7 +98,7 @@ func handleEnvironmentVars(config *Config) {
 		envValue := os.Getenv(envName)
 		if envValue != "" {
 			if !strings.Contains(fieldConfig, "secret") {
-				log.Println("use environment variable: ", envName, " = ", envValue)
+				util.Logger.Info("use environment variable: " + envName + " = " + envValue)
 			}
 			if configValue.FieldByName(fieldName).Kind() == reflect.Int {
 				i, _ := strconv.ParseInt(envValue, 10, 32)

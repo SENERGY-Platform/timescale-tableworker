@@ -22,12 +22,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/SENERGY-Platform/models/go/models"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 )
 
 type deviceCommand struct {
@@ -63,7 +63,7 @@ func (handler *Handler) handleDeviceMessage(msg []byte, t time.Time) error {
 func (handler *Handler) createDevice(d models.Device, t time.Time) error {
 	dt, err, _ := handler.deviceRepo.ReadDeviceType(d.DeviceTypeId, token)
 	if err != nil {
-		log.Println("Could not get device type", err)
+		util.Logger.Error("Could not get device type: " + err.Error())
 		return err
 	}
 	editMessage := TableEditMessage{
@@ -73,9 +73,8 @@ func (handler *Handler) createDevice(d models.Device, t time.Time) error {
 	query := "INSERT INTO \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableDeviceTypeDevices +
 		"\" (\"" + fieldDeviceTypeId + "\", \"" + fieldDeviceId + "\", \"" + fieldTime + "\") VALUES('" + d.DeviceTypeId +
 		"', '" + d.Id + "', '" + t.Format(time.RFC3339Nano) + "') ON CONFLICT DO NOTHING;"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
+
 	_, err = handler.db.Exec(query)
 	if err != nil {
 		return err
@@ -132,9 +131,8 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 		cancel()
 		return table, err
 	}
-	if handler.debug {
-		log.Println("Executing:", query)
-	}
+	util.Logger.Debug(query)
+
 	_, err = tx.Exec(query)
 	if err != nil {
 		_ = tx.Rollback()
@@ -156,14 +154,13 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 		query += "distributed_"
 	}
 	query += "hypertable('\"" + table + "\"','time');"
-	if handler.debug {
-		log.Println("Executing:", query)
-	}
+	util.Logger.Debug(query)
+
 	_, err = tx.Exec(query)
 	if err != nil {
 		_ = tx.Rollback()
 		if err.Error() == "pq: table \""+table+"\" is already a hypertable" {
-			log.Println("INFO: " + err.Error())
+			util.Logger.Debug(err.Error())
 		} else {
 			cancel()
 			return table, err
@@ -182,9 +179,8 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 	}
 	if handler.distributed {
 		query = "SELECT set_replication_factor('\"" + table + "\"', " + handler.replication + ");"
-		if handler.debug {
-			log.Println("Executing:", query)
-		}
+		util.Logger.Debug(query)
+
 		_, err = tx.Exec(query)
 		if err != nil {
 			_ = tx.Rollback()
@@ -211,9 +207,8 @@ func (handler *Handler) deleteDevice(deviceId string) error {
 		return err
 	}
 	query := "DELETE FROM \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableDeviceTypeDevices + "\" WHERE " + fieldDeviceId + " = '" + deviceId + "';"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
+
 	_, err = handler.db.Exec(query)
 	if err != nil {
 		return err
@@ -237,9 +232,8 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 		return tables, err
 	}
 	query := "SELECT table_name FROM information_schema.tables WHERE table_name like 'device:" + shortDeviceId + "_service:" + shortServiceId + "';"
-	if handler.debug {
-		log.Println("Executing:", query)
-	}
+	util.Logger.Debug(query)
+
 	res, err := handler.db.Query(query)
 	if err != nil {
 		_ = tx.Rollback()
@@ -258,9 +252,7 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 		tables = append(tables, string(table))
 
 		query := "DROP TABLE IF EXISTS \"" + string(table) + "\" CASCADE"
-		if handler.debug {
-			log.Println("Executing:", query)
-		}
+		util.Logger.Debug(query)
 
 		_, err := tx.Exec(query)
 		if err != nil {

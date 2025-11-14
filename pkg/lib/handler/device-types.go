@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"regexp"
 	"runtime/debug"
 	"slices"
@@ -32,6 +31,7 @@ import (
 	"time"
 
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
@@ -66,28 +66,22 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			return errors.Join(baseError, errors.New("could not obtain service meta"), err)
 		}
 		if lastUpdate.After(t) {
-			if handler.debug {
-				log.Println("Already processed newer version, skipping update...")
-			}
+			util.Logger.Debug("Already processed newer version, skipping update...")
+
 			continue
 		}
 		newHash := hashServiceOutputs(service)
-		if handler.debug {
-			log.Println("Old/New Hash", oldHash, newHash)
-		}
+		util.Logger.Debug("Old/New Hash", oldHash, newHash)
+
 		if oldHash == newHash {
-			if handler.debug {
-				log.Println("No relevant changes, skipping update...")
-			}
+			util.Logger.Debug("No relevant changes, skipping update...")
 			continue
 		}
 		outdatedDeviceIds, err := handler.getOutdatedDeviceIds(dt.Id, t)
 		if err != nil {
 			return errors.Join(baseError, errors.New("could not obtain outdated device ids"), err)
 		}
-		if handler.debug {
-			log.Printf("Found %v outdated devices that need to be updated\n", len(outdatedDeviceIds))
-		}
+		util.Logger.Debug("Found " + strconv.Itoa(len(outdatedDeviceIds)) + "outdated devices that need to be updated")
 		shortServiceId, err := devicetypes.ShortenId(service.Id)
 		if err != nil {
 			return errors.Join(baseError, errors.New("could not shorten service id"), err)
@@ -113,14 +107,11 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				return errors.Join(baseError, errors.New("could not check if table exists "+table), err)
 			}
 			if !exists {
-				if handler.debug {
-					log.Printf("Table does not exist yet, creating now %v\n", table)
-				}
+				util.Logger.Debug("Table does not exist yet, creating now " + table)
+
 				handler.createDeviceServiceTable(shortDeviceId, service)
 			} else {
-				if handler.debug {
-					log.Printf("Table exists already, updating now %v\n", table)
-				}
+				util.Logger.Debug("Table exists already, updating now " + table)
 				ctx, cancel := context.WithTimeout(handler.ctx, timeout)
 				defer cancel() // cancel is also called at the end of the loop, deferring it in case of an early return
 				tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
@@ -169,18 +160,14 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 						// add new fields
 						viewDefinition = viewDefinitionParts[0]
 						for _, add := range added {
-							if handler.debug {
-								log.Println("adding field " + add.ColumnName + " to view " + viewName)
-							}
+							util.Logger.Debug("adding field " + add.ColumnName + " to view " + viewName)
 							viewDefinition += ", \n" + caTypeMatches[1] + "\"" + table + "\"." + add.ColumnName + ", \"" + table + "\".\"time\") AS " + add.ColumnName
 						}
 						viewDefinition += "\n FROM" + viewDefinitionParts[1]
 
 						// remove outdated fields
 						for _, rm := range removed {
-							if handler.debug {
-								log.Println("removing field " + rm.ColumnName + " from view " + viewName)
-							}
+							util.Logger.Debug("removing field " + rm.ColumnName + " from view " + viewName)
 							rxStr := ",[^,]*(" + rm.ColumnName + ",.*" + rm.ColumnName + ")"
 							rx, err := regexp.Compile(rxStr)
 							if err != nil {
@@ -209,9 +196,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 						query += fmt.Sprintf(" DROP COLUMN %s,", rm.ColumnName)
 					}
 					query = strings.TrimSuffix(query, ",") + ";"
-					if handler.debug {
-						log.Println("Executing:", query)
-					}
+					util.Logger.Debug(query)
 					_, err = tx.Exec(query)
 					if err != nil {
 						_ = tx.Rollback()
@@ -271,9 +256,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				}
 				for _, nn := range setNotNull {
 					query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s SET NOT NULL;", table, nn.ColumnName)
-					if handler.debug {
-						log.Println("Executing:", query)
-					}
+					util.Logger.Debug(query)
 					_, err = tx.Exec(query)
 					if err != nil {
 						_ = tx.Rollback()
@@ -282,9 +265,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 				}
 				for _, nn := range dropNotNull {
 					query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s DROP NOT NULL;", table, nn.ColumnName)
-					if handler.debug {
-						log.Println("Executing:", query)
-					}
+					util.Logger.Debug(query)
 					_, err = tx.Exec(query)
 					if err != nil {
 						_ = tx.Rollback()
@@ -321,9 +302,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 func (handler *Handler) getKnownServiceMeta(serviceId string) (hash string, t time.Time, err error) {
 	query := "SELECT \"" + fieldHash + "\", " + "\"" + fieldTime + "\" FROM \"" + handler.conf.PostgresTableworkerSchema +
 		"\".\"" + tableServiceHashes + "\" WHERE \"" + fieldServiceId + "\" = '" + serviceId + "';"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	res, err := handler.db.Query(query)
 	if err != nil {
 		return
@@ -340,9 +319,7 @@ func (handler *Handler) upsertServiceMeta(serviceId string, hash string, t time.
 		"VALUES ('" + serviceId + "', '" + hash + "', '" + t.Format(time.RFC3339Nano) + "')" +
 		"ON CONFLICT ON CONSTRAINT \"" + tableServiceHashes + "_pkey\" DO UPDATE SET \"" + fieldHash + "\" = '" + hash + "', \"" + fieldTime + "\" = '" + t.Format(time.RFC3339Nano) +
 		"' WHERE \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableServiceHashes + "\".\"" + fieldServiceId + "\" = '" + serviceId + "';"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	res, err := handler.db.Query(query)
 	if err != nil {
 		return
@@ -356,9 +333,7 @@ func (handler *Handler) upsertServiceMeta(serviceId string, hash string, t time.
 func (handler *Handler) getOutdatedDeviceIds(deviceTypeId string, t time.Time) (deviceIds []string, err error) {
 	query := "SELECT \"" + fieldDeviceId + "\" FROM \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableDeviceTypeDevices + "\" WHERE \"" +
 		fieldDeviceTypeId + "\" = '" + deviceTypeId + "' AND \"" + fieldTime + "\" < '" + t.Format(time.RFC3339Nano) + "';"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	res, err := handler.db.Query(query)
 	if err != nil {
 		return
@@ -378,9 +353,7 @@ type forEachFn = func(table, viewSchema, viewName, viewDefinition string, materi
 
 func (handler *Handler) forEachCAofHypertable(table string, tx *sql.Tx, f forEachFn) error {
 	query := "SELECT view_schema, view_name, materialized_only, view_definition FROM timescaledb_information.continuous_aggregates WHERE hypertable_name = '" + table + "';"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	res, err := tx.Query(query)
 	if err != nil {
 		_ = tx.Rollback()
@@ -412,9 +385,7 @@ func (handler *Handler) forEachCAofHypertable(table string, tx *sql.Tx, f forEac
 func (handler *Handler) forEachStoredBackup(deviceId string, tx *sql.Tx, f forEachFn) error {
 	query := "SELECT " + strings.Join([]string{fieldViewSchema, fieldViewName, fieldBackupTable, fieldViewDefinition,
 		fieldMaterializedOnly}, ",") + " FROM \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableUpdateBackups + "\" WHERE " + fieldDeviceId + " = '" + deviceId + "';"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	res, err := tx.Query(query)
 	if err != nil {
 		_ = tx.Rollback()
@@ -453,26 +424,20 @@ func (handler *Handler) forEachStoredBackup(deviceId string, tx *sql.Tx, f forEa
 func (handler *Handler) backupAndDropCA(deviceId, viewSchema, viewName, viewDefinition string, materializedOnly bool, tx *sql.Tx) (backupTable string, err error) {
 	backupTable = "\"" + handler.conf.PostgresTableworkerSchema + "\".\"backup_" + strings.ReplaceAll(uuid.NewString(), "-", "") + "\""
 	query := "CREATE TABLE " + backupTable + " as TABLE \"" + viewSchema + "\".\"" + viewName + "\";"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	_, err = tx.Exec(query)
 	if err != nil {
 		return backupTable, errors.Join(errors.New("unable to create backup table"), err)
 	}
 	query = "INSERT INTO \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableUpdateBackups + "\" (" + strings.Join([]string{fieldDeviceId, fieldViewSchema, fieldViewName, fieldBackupTable, fieldViewDefinition,
 		fieldMaterializedOnly}, ",") + ") VALUES ('" + deviceId + "','" + viewSchema + "','" + viewName + "','" + backupTable + "','" + base64.StdEncoding.EncodeToString([]byte(viewDefinition)) + "'," + strconv.FormatBool(materializedOnly) + ");"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	_, err = tx.Exec(query)
 	if err != nil {
 		return backupTable, errors.Join(errors.New("unable to insert backup information"), err)
 	}
 	query = "DROP MATERIALIZED VIEW \"" + viewSchema + "\".\"" + viewName + "\";"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	_, err = tx.Exec(query)
 	if err != nil {
 		return backupTable, errors.Join(errors.New("unable to drop view"), err)
@@ -483,9 +448,7 @@ func (handler *Handler) backupAndDropCA(deviceId, viewSchema, viewName, viewDefi
 func (handler *Handler) createCA(viewSchema, viewName, viewDefinition string, materializedOnly bool, tx *sql.Tx) (err error) {
 	query := "CREATE MATERIALIZED VIEW \"" + viewSchema + "\".\"" + viewName + "\"" +
 		" WITH (timescaledb.continuous) AS " + viewDefinition[:len(viewDefinition)-1] + " WITH NO DATA;"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	_, err = tx.Exec(query)
 	if err != nil {
 		return errors.Join(errors.New("unable to create new view"), err)
@@ -511,25 +474,19 @@ func (handler *Handler) insertBackupDataAndDrop(viewSchema, viewName, backupTabl
 
 	fields := strings.Join(fieldNames, ", ")
 	query = "INSERT INTO \"" + materialization_hypertable_schema + "\".\"" + materialization_hypertable_name + "\" (" + fields + ") SELECT " + fields + " FROM " + backupTable + ";"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	_, err = tx.Exec(query)
 	if err != nil {
 		return errors.Join(backupTableError, errors.New("could not insert backup data"), err)
 	}
 	query = "DROP TABLE " + backupTable + ";"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	_, err = tx.Exec(query)
 	if err != nil {
 		return errors.Join(errors.New("unable to delete backup table "+backupTable), err)
 	}
 	query = "DELETE FROM \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableUpdateBackups + "\" WHERE " + fieldBackupTable + " = '" + backupTable + "';"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	_, err = tx.Exec(query)
 	if err != nil {
 		return errors.Join(errors.New("unable to delete backup info of table "+backupTable), err)
@@ -540,29 +497,21 @@ func (handler *Handler) insertBackupDataAndDrop(viewSchema, viewName, backupTabl
 func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fieldDescription, ctx context.Context, identifier string) (*sql.Tx, error) {
 	savepoint := "\"" + uuid.NewString() + "\""
 	query := "SAVEPOINT " + savepoint + ";"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	_, err := tx.Exec(query)
 	if err != nil {
 		_ = tx.Rollback()
 		return tx, err
 	}
 	query = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
-	if handler.debug {
-		log.Println("Executing:", query)
-	}
+	util.Logger.Debug(query)
 	_, err = tx.Query(query)
 	if err != nil {
 		pqErr, ok := err.(*pq.Error)
 		if ok && pqErr.Code == "0A000" && pqErr.Message == "cannot alter type of a column used by a view or rule" {
-			if handler.debug {
-				log.Println("View is blocking change of column type, trying workaround")
-			}
+			util.Logger.Debug("View is blocking change of column type, trying workaround")
 			query2 := "ROLLBACK TO SAVEPOINT " + savepoint + ";"
-			if handler.debug {
-				log.Println(query2)
-			}
+			util.Logger.Debug(query2)
 			_, err = tx.Exec(query2)
 			if err != nil {
 				return tx, err
@@ -589,9 +538,7 @@ func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fiel
 				_ = tx.Rollback()
 				return tx, err
 			}
-			if handler.debug {
-				log.Println(query)
-			}
+			util.Logger.Debug(query)
 			_, err = tx.Exec(query)
 			if err != nil {
 				return tx, err
@@ -647,9 +594,7 @@ func (handler *Handler) lockExclusive(tx *sql.Tx, schema string, table string) e
 		fqn = "\"" + schema + "\"." + fqn
 	}
 	query := "LOCK " + fqn + " in ACCESS EXCLUSIVE MODE;"
-	if handler.debug {
-		log.Println(query)
-	}
+	util.Logger.Debug(query)
 	_, err := tx.Exec(query)
 	if err != nil {
 		return err

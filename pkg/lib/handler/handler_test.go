@@ -21,7 +21,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"slices"
 	"strings"
 	"sync"
@@ -29,14 +28,17 @@ import (
 	"time"
 
 	"github.com/SENERGY-Platform/device-repository/lib/client"
+	structlogger "github.com/SENERGY-Platform/go-service-base/struct-logger"
 	"github.com/SENERGY-Platform/models/go/models"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/test/docker"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 	_ "github.com/lib/pq"
 )
 
 func TestHandler(t *testing.T) {
+	util.InitStructLogger("debug", structlogger.ColoredTextHandlerSelector)
 	wg := &sync.WaitGroup{}
 	defer wg.Wait()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -62,7 +64,7 @@ func TestHandler(t *testing.T) {
 		conf.PostgresPw,
 		conf.PostgresDb)
 
-	log.Println("Connecting to PSQL...", psqlconn)
+	util.Logger.Info("Connecting to PSQL... " + psqlconn)
 	// open database
 	db, err := sql.Open("postgres", psqlconn)
 	if err != nil {
@@ -81,7 +83,6 @@ func TestHandler(t *testing.T) {
 		distributed: false,
 		replication: "",
 		deviceRepo:  deviceRepoClient,
-		debug:       true,
 		ctx:         ctx,
 		conf:        conf,
 		producer: &testProducer{f: func(topic string, msg string) error {

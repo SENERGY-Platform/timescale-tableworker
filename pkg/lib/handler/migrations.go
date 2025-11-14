@@ -18,7 +18,9 @@ package handler
 
 import (
 	"database/sql"
-	"log"
+	"strconv"
+
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 )
 
 func (handler *Handler) migrate() error {
@@ -44,9 +46,7 @@ func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
 			tx.Rollback()
 			return err
 		}
-		if handler.debug {
-			log.Println("Migrating " + table)
-		}
+		util.Logger.Debug("Migrating " + table)
 		tx, err = handler.handleColumnTypeChange(tx, table, fieldDescription{
 			ColumnName: "time",
 			Nullable:   false,
@@ -65,8 +65,6 @@ func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
 	if err != nil {
 		return err
 	}
-	if handler.debug {
-		log.Printf("Finished TIMESTAMPTZ migration, ran for %v tables\n", i)
-	}
+	util.Logger.Debug("Finished TIMESTAMPTZ migration, ran for " + strconv.Itoa(i) + " tables")
 	return nil
 }

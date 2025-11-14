@@ -18,20 +18,20 @@ package api_doc
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/SENERGY-Platform/api-docs-provider/lib/client"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 )
 
 func PublishAsyncapiDoc(conf config.Config) {
 	adpClient := client.New(http.DefaultClient, conf.ApiDocsProviderBaseUrl)
 	file, err := os.Open("docs/asyncapi.json")
 	if err != nil {
-		log.Println(err)
+		util.Logger.Warn(err.Error())
 		return
 	}
 	defer file.Close()
@@ -39,7 +39,7 @@ func PublishAsyncapiDoc(conf config.Config) {
 	defer cf()
 	err = adpClient.AsyncapiPutDocFromReader(ctx, "github_com_SENERGY-Platform_timescale-tableworker", file)
 	if err != nil {
-		log.Println(err)
+		util.Logger.Warn(err.Error())
 		return
 	}
 }

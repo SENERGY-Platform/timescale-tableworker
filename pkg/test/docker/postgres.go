@@ -19,21 +19,21 @@ package docker
 import (
 	"context"
 	"errors"
-	"log"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func Timescale(ctx context.Context, wg *sync.WaitGroup) (host string, port int, user string, pw string, db string, err error) {
-	log.Println("start timescale")
+	util.Logger.Info("start timescale")
 	pw = "postgrespw"
 	user = "postgres"
 	db = "postgres"
-	errStr := "The container name \"/timescale-wrapper-test-db\" is already in use"
+	errStr := "the container name \"/timescale-wrapper-test-db\" is already in use"
 	err = errors.New(errStr)
 	i := 0
 	var c testcontainers.Container
@@ -70,7 +70,11 @@ func Timescale(ctx context.Context, wg *sync.WaitGroup) (host string, port int, 
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		log.Println("DEBUG: remove container timescale", c.Terminate(context.Background()))
+		util.Logger.Debug("remove container timescale")
+		err = c.Terminate(context.Background())
+		if err != nil {
+			util.Logger.Error("remove container timescale")
+		}
 	}()
 
 	return host, port, user, pw, db, err

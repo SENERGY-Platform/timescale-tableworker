@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 	"github.com/Shopify/sarama"
 )
 
@@ -85,7 +86,7 @@ outer:
 		needsSync = true
 	}
 
-	consumer = &Consumer{ctx: ctx, wg: wg, brokers: brokers, topics: topics, listener: listener, errorhandler: errorhandler, ready: make(chan bool), groupId: groupId, debug: debug, saramaConfig: saramaConfig}
+	consumer = &Consumer{ctx: ctx, wg: wg, brokers: brokers, topics: topics, listener: listener, errorhandler: errorhandler, ready: make(chan bool), groupId: groupId, saramaConfig: saramaConfig}
 	return
 }
 
@@ -101,7 +102,6 @@ type Consumer struct {
 	offset       int64
 	groupId      string
 	ready        chan bool
-	debug        bool
 	saramaConfig *sarama.Config
 }
 
@@ -115,7 +115,7 @@ func (this *Consumer) Start() error {
 		for {
 			select {
 			case <-this.ctx.Done():
-				log.Println("close kafka reader")
+				util.Logger.Info("close kafka reader")
 				return
 			default:
 				if err := consumerGroup.Consume(this.ctx, this.topics, this); err != nil {
@@ -131,7 +131,7 @@ func (this *Consumer) Start() error {
 	}()
 
 	<-this.ready // Await till the consumer has been set up
-	log.Println("Kafka consumer up and running...")
+	util.Logger.Info("Kafka consumer up and running...")
 
 	return err
 }
@@ -145,7 +145,7 @@ func (this *Consumer) Setup(session sarama.ConsumerGroupSession) error {
 
 // Cleanup is run at the end of a session, once all ConsumeClaim goroutines have exited
 func (this *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
-	log.Println("Cleaned up kafka session")
+	util.Logger.Info("Cleaned up kafka session")
 	this.wg.Done()
 	return nil
 }
@@ -155,12 +155,10 @@ func (this *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sa
 	for message := range claim.Messages() {
 		select {
 		case <-this.ctx.Done():
-			log.Println("Ignoring queued kafka messages for faster shutdown")
+			util.Logger.Info("Ignoring queued kafka messages for faster shutdown")
 			return nil
 		default:
-			if this.debug {
-				log.Println(message.Topic, message.Timestamp, string(message.Value))
-			}
+			util.Logger.Debug("kafka message", "topic", message.Topic, "timestamp", message.Timestamp, "value", string(message.Value))
 			err := this.listener(message.Topic, message.Value, message.Timestamp)
 			if err != nil {
 				this.errorhandler(err, this)

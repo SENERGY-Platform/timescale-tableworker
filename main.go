@@ -19,13 +19,16 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/SENERGY-Platform/timescale-tableworker/pkg"
-	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	structlogger "github.com/SENERGY-Platform/go-service-base/struct-logger"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
 )
 
 func main() {
@@ -36,6 +39,12 @@ func main() {
 	if err != nil {
 		log.Fatal("ERROR: unable to load conf ", err)
 	}
+
+	level := "debug"
+	if !conf.Debug {
+		level = "info"
+	}
+	util.InitStructLogger(level, structlogger.JsonHandlerSelector)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -49,11 +58,11 @@ func main() {
 		shutdown := make(chan os.Signal, 1)
 		signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 		sig := <-shutdown
-		log.Println("received shutdown signal", sig)
+		util.Logger.Info("received shutdown signal " + sig.String())
 		shutdownTime = time.Now()
 		cancel()
 	}()
 
 	wg.Wait()
-	log.Println("Shutdown complete, took", time.Since(shutdownTime))
+	util.Logger.Info("Shutdown complete, took " + time.Since(shutdownTime).String())
 }
