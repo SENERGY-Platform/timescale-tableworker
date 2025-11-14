@@ -108,7 +108,6 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 			}
 			if !exists {
 				util.Logger.Debug("Table does not exist yet, creating now " + table)
-
 				handler.createDeviceServiceTable(shortDeviceId, service)
 			} else {
 				util.Logger.Debug("Table exists already, updating now " + table)
@@ -127,7 +126,8 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 					return errors.Join(baseError, errors.New("could not obtain field descriptions"), err)
 				}
 				added, removed, newType, setNotNull, dropNotNull := compareFds(fdBeforeAllChanges, fdAfterAllChanges)
-				if len(added) > 0 || len(removed) > 0 {
+				if len(added) > 0 || len(removed) > 0 || len(newType) > 0 || len(setNotNull) > 0 || len(dropNotNull) > 0 {
+					// setup tx
 					// backup all CA
 					// update table
 					// re-create CA with new fields
@@ -195,6 +195,15 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 					for _, rm := range removed {
 						query += fmt.Sprintf(" DROP COLUMN %s,", rm.ColumnName)
 					}
+					for _, nt := range newType {
+						query += fmt.Sprintf(" ALTER COLUMN %s TYPE %s,", nt.ColumnName, nt.DataType)
+					}
+					for _, nn := range setNotNull {
+						query += fmt.Sprintf(" ALTER COLUMN %s SET NOT NULL,", nn.ColumnName)
+					}
+					for _, nn := range dropNotNull {
+						query += fmt.Sprintf(" ALTER COLUMN %s DROP NOT NULL,", nn.ColumnName)
+					}
 					query = strings.TrimSuffix(query, ",") + ";"
 					util.Logger.Debug(query)
 					_, err = tx.Exec(query)
@@ -246,31 +255,6 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 						return errors.Join(baseError, err)
 					}
 
-				}
-				for _, nt := range newType { // TODO
-					tx, err = handler.handleColumnTypeChange(tx, table, nt, ctx, outdatedDeviceId)
-					if err != nil {
-						_ = tx.Rollback()
-						errors.Join(baseError, err)
-					}
-				}
-				for _, nn := range setNotNull {
-					query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s SET NOT NULL;", table, nn.ColumnName)
-					util.Logger.Debug(query)
-					_, err = tx.Exec(query)
-					if err != nil {
-						_ = tx.Rollback()
-						return errors.Join(baseError, errors.New("could not execute query "+query), err)
-					}
-				}
-				for _, nn := range dropNotNull {
-					query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s DROP NOT NULL;", table, nn.ColumnName)
-					util.Logger.Debug(query)
-					_, err = tx.Exec(query)
-					if err != nil {
-						_ = tx.Rollback()
-						return errors.Join(baseError, errors.New("could not execute query "+query), err)
-					}
 				}
 				err = tx.Commit()
 				if err != nil {
