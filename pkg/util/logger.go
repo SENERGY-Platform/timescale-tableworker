@@ -29,27 +29,25 @@ import (
 var Logger *slog.Logger
 
 func InitStructLogger(level string, handler string) {
-	if Logger == nil {
-		info, ok := debug.ReadBuildInfo()
-		project := "timescale-tableworker"
-		org := "github.com/SENERGY-Platform"
-		if ok {
-			if parts := strings.Split(info.Main.Path, "/"); len(parts) > 2 {
-				project = strings.Join(parts[2:], "/")
-				org = strings.Join(parts[:2], "/")
-			}
+	info, ok := debug.ReadBuildInfo()
+	project := "timescale-tableworker"
+	org := "github.com/SENERGY-Platform"
+	if ok {
+		if parts := strings.Split(info.Main.Path, "/"); len(parts) > 2 {
+			project = strings.Join(parts[2:], "/")
+			org = strings.Join(parts[:2], "/")
 		}
-		Logger = structlogger.New(
-			structlogger.Config{
-				Handler:    handler,
-				Level:      level,
-				TimeFormat: time.RFC3339Nano,
-				TimeUtc:    true,
-				AddMeta:    true,
-			},
-			os.Stdout,
-			org,
-			project,
-		)
 	}
+	Logger = structlogger.New(
+		structlogger.Config{
+			Handler:    handler,
+			Level:      level,
+			TimeFormat: time.RFC3339Nano,
+			TimeUtc:    true,
+			AddMeta:    true,
+		},
+		os.Stdout,
+		org,
+		project,
+	)
 }

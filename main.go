@@ -32,6 +32,9 @@ import (
 )
 
 func main() {
+	level := "debug"
+	util.InitStructLogger(level, structlogger.JsonHandlerSelector)
+
 	configLocation := flag.String("config", "config.json", "configuration file")
 	flag.Parse()
 
@@ -40,7 +43,6 @@ func main() {
 		log.Fatal("ERROR: unable to load conf ", err)
 	}
 
-	level := "debug"
 	if !conf.Debug {
 		level = "info"
 	}
