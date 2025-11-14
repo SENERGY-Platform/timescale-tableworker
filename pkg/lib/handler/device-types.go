@@ -26,6 +26,7 @@ import (
 	"log"
 	"regexp"
 	"runtime/debug"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -135,37 +136,22 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 					return errors.Join(baseError, errors.New("could not obtain field descriptions"), err)
 				}
 				added, removed, newType, setNotNull, dropNotNull := compareFds(fdBeforeAllChanges, fdAfterAllChanges)
-				for _, add := range added {
-					fdCurrent, err := getFieldDescriptionsOfTable(table, tx)
-					if err != nil {
-						return errors.Join(baseError, errors.New("could not obtain field descriptions"), err)
-					}
-					currentFieldNames := []string{}
-					for _, f := range fdCurrent {
-						currentFieldNames = append(currentFieldNames, f.ColumnName)
-					}
-
-					query := fmt.Sprintf("ALTER TABLE \"%s\" ADD COLUMN %s;", table, add.String())
-					if handler.debug {
-						log.Println("Executing:", query)
-					}
-					_, err = tx.Exec(query)
-					if err != nil {
-						_ = tx.Rollback()
-						return errors.Join(baseError, errors.New("could not execute query "+query), err)
-					}
-
-					err = forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
+				if len(added) > 0 || len(removed) > 0 {
+					// backup all CA
+					// update table
+					// re-create CA with new fields
+					// commit
+					// insert backup data to CA
+					err = handler.forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
 						return handler.lockExclusive(tx, viewSchema, viewName)
 					})
 					if err != nil {
-						return errors.Join(baseError, fmt.Errorf("could not lock ca"), err)
+						_ = tx.Rollback()
+						return errors.Join(baseError, err)
 					}
+					createCAFn := []func() error{}
 
-					err = forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
-						if handler.debug {
-							log.Println("adding field " + add.ColumnName + " to view " + viewName)
-						}
+					err = handler.forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
 						_, err := handler.backupAndDropCA(outdatedDeviceId, viewSchema, viewName, viewDefinition, materializedOnly, tx)
 						if err != nil {
 							_ = tx.Rollback()
@@ -180,17 +166,72 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 						if len(viewDefinitionParts) != 2 {
 							return errors.New("unexpected len(viewDefinitionParts)")
 						}
-						viewDefinition = viewDefinitionParts[0] + ", \n" + caTypeMatches[1] + "\"" + table + "\"." + add.ColumnName + ", \"" + table + "\".\"time\") AS " + add.ColumnName + "\n FROM" + viewDefinitionParts[1]
-						err = createCA(viewSchema, viewName, viewDefinition, materializedOnly, tx)
-						if err != nil {
-							return err
+						// add new fields
+						viewDefinition = viewDefinitionParts[0]
+						for _, add := range added {
+							if handler.debug {
+								log.Println("adding field " + add.ColumnName + " to view " + viewName)
+							}
+							viewDefinition += ", \n" + caTypeMatches[1] + "\"" + table + "\"." + add.ColumnName + ", \"" + table + "\".\"time\") AS " + add.ColumnName
 						}
+						viewDefinition += "\n FROM" + viewDefinitionParts[1]
+
+						// remove outdated fields
+						for _, rm := range removed {
+							if handler.debug {
+								log.Println("removing field " + rm.ColumnName + " from view " + viewName)
+							}
+							rxStr := ",[^,]*(" + rm.ColumnName + ",.*" + rm.ColumnName + ")"
+							rx, err := regexp.Compile(rxStr)
+							if err != nil {
+								return errors.Join(baseError, errors.New("unable to compile regexp "+rxStr), err)
+							}
+							viewDefinition = rx.ReplaceAllString(viewDefinition, "")
+						}
+						createCAFn = append(createCAFn, func() error {
+							err = handler.createCA(viewSchema, viewName, viewDefinition, materializedOnly, tx)
+							if err != nil {
+								return err
+							}
+							return nil
+						})
 						return nil
 					})
 					if err != nil {
 						return errors.Join(fmt.Errorf("could not backup CAs for table %s", table), err)
 					}
 
+					query := fmt.Sprintf("ALTER TABLE \"%s\"", table)
+					for _, add := range added {
+						query += fmt.Sprintf(" ADD COLUMN %s,", add.String())
+					}
+					for _, rm := range removed {
+						query += fmt.Sprintf(" DROP COLUMN %s,", rm.ColumnName)
+					}
+					query = strings.TrimSuffix(query, ",") + ";"
+					if handler.debug {
+						log.Println("Executing:", query)
+					}
+					_, err = tx.Exec(query)
+					if err != nil {
+						_ = tx.Rollback()
+						return errors.Join(baseError, err)
+					}
+
+					for _, f := range createCAFn {
+						err = f()
+						if err != nil {
+							_ = tx.Rollback()
+							return errors.Join(baseError, err)
+						}
+					}
+
+					fieldNamesAfterRm := []string{}
+					for _, f := range fdBeforeAllChanges {
+						if !slices.ContainsFunc(removed, func(r fieldDescription) bool { return r.ColumnName == f.ColumnName }) {
+							fieldNamesAfterRm = append(fieldNamesAfterRm, f.ColumnName)
+						}
+					}
 					// TX Commit needed, because following insertBackupDataAndDrop will not find the hypertable otherwise.
 					// Since this might result in a partial update an ALL CAPS warning is printed and sent to dev notifications
 					err = tx.Commit()
@@ -209,7 +250,7 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 					}
 
 					err = handler.forEachStoredBackup(outdatedDeviceId, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
-						err = handler.insertBackupDataAndDrop(viewSchema, viewName, backupTable, currentFieldNames, tx)
+						err = handler.insertBackupDataAndDrop(viewSchema, viewName, backupTable, fieldNamesAfterRm, tx)
 						if err != nil {
 							return errors.Join(baseError, err)
 						}
@@ -219,101 +260,9 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 						_ = tx.Rollback()
 						return errors.Join(baseError, err)
 					}
+
 				}
-				for _, rm := range removed {
-					savepoint := "\"" + uuid.NewString() + "\""
-					_, err = tx.Exec("SAVEPOINT " + savepoint + ";")
-					if err != nil {
-						_ = tx.Rollback()
-						return errors.Join(baseError, err)
-					}
-					query := fmt.Sprintf("ALTER TABLE \"%s\" DROP COLUMN %s;", table, rm.ColumnName) // can not use cascade as this simply drops all CAs
-					if handler.debug {
-						log.Println("Executing:", query)
-					}
-					_, err = tx.Exec(query)
-					if err != nil {
-						pqErr, ok := err.(*pq.Error)
-						if ok && pqErr.Code == "2BP01" && pqErr.Message == "cannot drop desired object(s) because other objects depend on them" {
-							_, err = tx.Exec("ROLLBACK TO SAVEPOINT " + savepoint + ";")
-							if err != nil {
-								_ = tx.Rollback()
-								return errors.Join(baseError, err)
-							}
-							fdCurrent, err := getFieldDescriptionsOfTable(table, tx)
-							if err != nil {
-								return errors.Join(baseError, errors.New("could not obtain field descriptions"), err)
-							}
-
-							fieldNamesAfterThisRm := []string{}
-							for _, f := range fdCurrent {
-								if f.ColumnName != rm.ColumnName {
-									fieldNamesAfterThisRm = append(fieldNamesAfterThisRm, f.ColumnName)
-								}
-							}
-
-							rxStr := ",[^,]*(" + rm.ColumnName + ",.*" + rm.ColumnName + ")"
-							rx, err := regexp.Compile(rxStr)
-							if err != nil {
-								return errors.Join(baseError, errors.New("unable to compile regexp "+rxStr), err)
-							}
-
-							err = forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
-								if handler.debug {
-									log.Println("removing field " + rm.ColumnName + " from view " + viewName)
-								}
-								_, err := handler.backupAndDropCA(outdatedDeviceId, viewSchema, viewName, viewDefinition, materializedOnly, tx)
-								if err != nil {
-									_ = tx.Rollback()
-									return err
-								}
-								viewDefinition = rx.ReplaceAllString(viewDefinition, "")
-								err = createCA(viewSchema, viewName, viewDefinition, materializedOnly, tx)
-								if err != nil {
-									return err
-								}
-
-								return nil
-							})
-							if err != nil {
-								_ = tx.Rollback()
-								return errors.Join(baseError, err)
-							}
-							// TX Commit needed, because following insertBackupDataAndDrop will not find the hypertable otherwise.
-							// Since this might result in a partial update an ALL CAPS warning is printed and sent to dev notifications
-							err = tx.Commit()
-							if err != nil {
-								return errors.Join(errors.New("could not commit transaction"), err)
-							}
-							tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
-							if err != nil {
-								return errors.Join(errors.New("could not renew transaction, MIGHT NEED TO MANUALLY FIX WITH BACKUP DATA"), err)
-							}
-							err = handler.forEachStoredBackup(outdatedDeviceId, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
-								return handler.lockExclusive(tx, viewSchema, viewName)
-							})
-							if err != nil {
-								return errors.Join(baseError, fmt.Errorf("could not lock ca"), err)
-							}
-							err = handler.forEachStoredBackup(outdatedDeviceId, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
-								err = handler.insertBackupDataAndDrop(viewSchema, viewName, backupTable, fieldNamesAfterThisRm, tx)
-								if err != nil {
-									return errors.Join(baseError, err)
-								}
-								return nil
-							})
-							_, err = tx.Exec(query)
-							if err != nil {
-								_ = tx.Rollback()
-								return errors.Join(baseError, err)
-							}
-						} else {
-							_ = tx.Rollback()
-							return errors.Join(baseError, errors.New("could not execute query "+query), err)
-						}
-					}
-				}
-				for _, nt := range newType {
+				for _, nt := range newType { // TODO
 					tx, err = handler.handleColumnTypeChange(tx, table, nt, ctx, outdatedDeviceId)
 					if err != nil {
 						_ = tx.Rollback()
@@ -427,8 +376,11 @@ func (handler *Handler) getOutdatedDeviceIds(deviceTypeId string, t time.Time) (
 
 type forEachFn = func(table, viewSchema, viewName, viewDefinition string, materializedOnly bool) error
 
-func forEachCAofHypertable(table string, tx *sql.Tx, f forEachFn) error {
+func (handler *Handler) forEachCAofHypertable(table string, tx *sql.Tx, f forEachFn) error {
 	query := "SELECT view_schema, view_name, materialized_only, view_definition FROM timescaledb_information.continuous_aggregates WHERE hypertable_name = '" + table + "';"
+	if handler.debug {
+		log.Println(query)
+	}
 	res, err := tx.Query(query)
 	if err != nil {
 		_ = tx.Rollback()
@@ -460,6 +412,9 @@ func forEachCAofHypertable(table string, tx *sql.Tx, f forEachFn) error {
 func (handler *Handler) forEachStoredBackup(deviceId string, tx *sql.Tx, f forEachFn) error {
 	query := "SELECT " + strings.Join([]string{fieldViewSchema, fieldViewName, fieldBackupTable, fieldViewDefinition,
 		fieldMaterializedOnly}, ",") + " FROM \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableUpdateBackups + "\" WHERE " + fieldDeviceId + " = '" + deviceId + "';"
+	if handler.debug {
+		log.Println(query)
+	}
 	res, err := tx.Query(query)
 	if err != nil {
 		_ = tx.Rollback()
@@ -497,26 +452,41 @@ func (handler *Handler) forEachStoredBackup(deviceId string, tx *sql.Tx, f forEa
 
 func (handler *Handler) backupAndDropCA(deviceId, viewSchema, viewName, viewDefinition string, materializedOnly bool, tx *sql.Tx) (backupTable string, err error) {
 	backupTable = "\"" + handler.conf.PostgresTableworkerSchema + "\".\"backup_" + strings.ReplaceAll(uuid.NewString(), "-", "") + "\""
-	_, err = tx.Exec("CREATE TABLE " + backupTable + " as TABLE \"" + viewSchema + "\".\"" + viewName + "\";")
+	query := "CREATE TABLE " + backupTable + " as TABLE \"" + viewSchema + "\".\"" + viewName + "\";"
+	if handler.debug {
+		log.Println(query)
+	}
+	_, err = tx.Exec(query)
 	if err != nil {
 		return backupTable, errors.Join(errors.New("unable to create backup table"), err)
 	}
-	query := "INSERT INTO \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableUpdateBackups + "\" (" + strings.Join([]string{fieldDeviceId, fieldViewSchema, fieldViewName, fieldBackupTable, fieldViewDefinition,
+	query = "INSERT INTO \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableUpdateBackups + "\" (" + strings.Join([]string{fieldDeviceId, fieldViewSchema, fieldViewName, fieldBackupTable, fieldViewDefinition,
 		fieldMaterializedOnly}, ",") + ") VALUES ('" + deviceId + "','" + viewSchema + "','" + viewName + "','" + backupTable + "','" + base64.StdEncoding.EncodeToString([]byte(viewDefinition)) + "'," + strconv.FormatBool(materializedOnly) + ");"
+	if handler.debug {
+		log.Println(query)
+	}
 	_, err = tx.Exec(query)
 	if err != nil {
 		return backupTable, errors.Join(errors.New("unable to insert backup information"), err)
 	}
-	_, err = tx.Exec("DROP MATERIALIZED VIEW \"" + viewSchema + "\".\"" + viewName + "\";")
+	query = "DROP MATERIALIZED VIEW \"" + viewSchema + "\".\"" + viewName + "\";"
+	if handler.debug {
+		log.Println(query)
+	}
+	_, err = tx.Exec(query)
 	if err != nil {
 		return backupTable, errors.Join(errors.New("unable to drop view"), err)
 	}
 	return
 }
 
-func createCA(viewSchema, viewName, viewDefinition string, materializedOnly bool, tx *sql.Tx) (err error) {
-	_, err = tx.Exec("CREATE MATERIALIZED VIEW \"" + viewSchema + "\".\"" + viewName + "\"" +
-		" WITH (timescaledb.continuous) AS " + viewDefinition[:len(viewDefinition)-1] + " WITH NO DATA;")
+func (handler *Handler) createCA(viewSchema, viewName, viewDefinition string, materializedOnly bool, tx *sql.Tx) (err error) {
+	query := "CREATE MATERIALIZED VIEW \"" + viewSchema + "\".\"" + viewName + "\"" +
+		" WITH (timescaledb.continuous) AS " + viewDefinition[:len(viewDefinition)-1] + " WITH NO DATA;"
+	if handler.debug {
+		log.Println(query)
+	}
+	_, err = tx.Exec(query)
 	if err != nil {
 		return errors.Join(errors.New("unable to create new view"), err)
 	}
@@ -540,16 +510,27 @@ func (handler *Handler) insertBackupDataAndDrop(viewSchema, viewName, backupTabl
 	}
 
 	fields := strings.Join(fieldNames, ", ")
-	_, err = tx.Exec("INSERT INTO \"" + materialization_hypertable_schema + "\".\"" + materialization_hypertable_name + "\" (" + fields + ") SELECT " + fields + " FROM " + backupTable + ";")
+	query = "INSERT INTO \"" + materialization_hypertable_schema + "\".\"" + materialization_hypertable_name + "\" (" + fields + ") SELECT " + fields + " FROM " + backupTable + ";"
+	if handler.debug {
+		log.Println(query)
+	}
+	_, err = tx.Exec(query)
 	if err != nil {
 		return errors.Join(backupTableError, errors.New("could not insert backup data"), err)
 	}
-
-	_, err = tx.Exec("DROP TABLE " + backupTable + ";")
+	query = "DROP TABLE " + backupTable + ";"
+	if handler.debug {
+		log.Println(query)
+	}
+	_, err = tx.Exec(query)
 	if err != nil {
 		return errors.Join(errors.New("unable to delete backup table "+backupTable), err)
 	}
-	_, err = tx.Exec("DELETE FROM \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableUpdateBackups + "\" WHERE " + fieldBackupTable + " = '" + backupTable + "';")
+	query = "DELETE FROM \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableUpdateBackups + "\" WHERE " + fieldBackupTable + " = '" + backupTable + "';"
+	if handler.debug {
+		log.Println(query)
+	}
+	_, err = tx.Exec(query)
 	if err != nil {
 		return errors.Join(errors.New("unable to delete backup info of table "+backupTable), err)
 	}
@@ -558,12 +539,16 @@ func (handler *Handler) insertBackupDataAndDrop(viewSchema, viewName, backupTabl
 
 func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fieldDescription, ctx context.Context, identifier string) (*sql.Tx, error) {
 	savepoint := "\"" + uuid.NewString() + "\""
-	_, err := tx.Exec("SAVEPOINT " + savepoint + ";")
+	query := "SAVEPOINT " + savepoint + ";"
+	if handler.debug {
+		log.Println(query)
+	}
+	_, err := tx.Exec(query)
 	if err != nil {
 		_ = tx.Rollback()
 		return tx, err
 	}
-	query := fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
+	query = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
 	if handler.debug {
 		log.Println("Executing:", query)
 	}
@@ -574,7 +559,11 @@ func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fiel
 			if handler.debug {
 				log.Println("View is blocking change of column type, trying workaround")
 			}
-			_, err = tx.Exec("ROLLBACK TO SAVEPOINT " + savepoint + ";")
+			query2 := "ROLLBACK TO SAVEPOINT " + savepoint + ";"
+			if handler.debug {
+				log.Println(query2)
+			}
+			_, err = tx.Exec(query2)
 			if err != nil {
 				return tx, err
 			}
@@ -588,7 +577,7 @@ func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fiel
 				fieldNamesCurrent = append(fieldNamesCurrent, f.ColumnName)
 			}
 
-			err = forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
+			err = handler.forEachCAofHypertable(table, tx, func(hypertableName, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
 				_, err := handler.backupAndDropCA(identifier, viewSchema, viewName, viewDefinition, materializedOnly, tx)
 				if err != nil {
 					_ = tx.Rollback()
@@ -600,12 +589,15 @@ func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fiel
 				_ = tx.Rollback()
 				return tx, err
 			}
+			if handler.debug {
+				log.Println(query)
+			}
 			_, err = tx.Exec(query)
 			if err != nil {
 				return tx, err
 			}
 			err = handler.forEachStoredBackup(identifier, tx, func(backupTable, viewSchema, viewName, viewDefinition string, materializedOnly bool) error {
-				err = createCA(viewSchema, viewName, viewDefinition, materializedOnly, tx)
+				err = handler.createCA(viewSchema, viewName, viewDefinition, materializedOnly, tx)
 				if err != nil {
 					return err
 				}

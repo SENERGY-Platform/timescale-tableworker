@@ -595,7 +595,7 @@ func TestHandler(t *testing.T) {
 				return
 			}
 			i := 0
-			err = forEachCAofHypertable(table, tx, func(table string, viewSchema string, viewName string, viewDefinition string, materialized_only bool) error {
+			err = handler.forEachCAofHypertable(table, tx, func(table string, viewSchema string, viewName string, viewDefinition string, materialized_only bool) error {
 				i++
 				return nil
 			})
