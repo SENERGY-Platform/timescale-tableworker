@@ -231,7 +231,7 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 		cancel()
 		return tables, err
 	}
-	query := "SELECT table_name FROM information_schema.tables WHERE table_name like 'device:" + shortDeviceId + "_service:" + shortServiceId + "';"
+	query := "SELECT table_name, table_type FROM information_schema.tables WHERE table_name like 'device:" + shortDeviceId + "_service:" + shortServiceId + "';"
 	util.Logger.Debug(query)
 
 	res, err := handler.db.Query(query)
@@ -243,25 +243,23 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 	tables = []string{}
 	for res.Next() {
 		var table []byte
-		err = res.Scan(&table)
+		var tableType string
+		err = res.Scan(&table, &tableType)
 		if err != nil {
 			_ = tx.Rollback()
 			cancel()
 			return tables, err
 		}
 		tables = append(tables, string(table))
+		if tableType == "BASE TABLE" {
+			tableType = "TABLE"
+		}
 
-		query := "DROP TABLE IF EXISTS \"" + string(table) + "\" CASCADE"
+		query := fmt.Sprintf("DROP %s IF EXISTS \"%s\" CASCADE", tableType, string(table))
 		util.Logger.Debug(query)
 
 		_, err := tx.Exec(query)
 		if err != nil {
-			if strings.Contains(err.Error(), "is not a table") {
-				util.Logger.Debug(string(table) + " is not a table, trying to drop as view...")
-				query := "DROP VIEW IF EXISTS \"" + string(table) + "\" CASCADE"
-				util.Logger.Debug(query)
-				_, err = tx.Exec(query)
-			}
 			if err != nil {
 				_ = tx.Rollback()
 				cancel()
