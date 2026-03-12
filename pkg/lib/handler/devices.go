@@ -251,8 +251,11 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 			return tables, err
 		}
 		tables = append(tables, string(table))
-		if tableType == "BASE TABLE" {
+		switch tableType {
+		case "BASE TABLE":
 			tableType = "TABLE"
+		case "VIEW":
+			tableType = "MATERIALIZED VIEW"
 		}
 
 		query := fmt.Sprintf("DROP %s IF EXISTS \"%s\" CASCADE", tableType, string(table))
