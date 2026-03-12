@@ -256,9 +256,17 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 
 		_, err := tx.Exec(query)
 		if err != nil {
-			_ = tx.Rollback()
-			cancel()
-			return tables, err
+			if strings.Contains(err.Error(), "is not a table") {
+				util.Logger.Debug(string(table) + " is not a table, trying to drop as view...")
+				query := "DROP VIEW IF EXISTS \"" + string(table) + "\" CASCADE"
+				util.Logger.Debug(query)
+				_, err = tx.Exec(query)
+			}
+			if err != nil {
+				_ = tx.Rollback()
+				cancel()
+				return tables, err
+			}
 		}
 	}
 	err = res.Err()
