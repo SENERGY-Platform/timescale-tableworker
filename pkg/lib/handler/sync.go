@@ -18,6 +18,7 @@ package handler
 
 import (
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/SENERGY-Platform/device-repository/lib/model"
@@ -39,6 +40,7 @@ func (handler *Handler) FullSync() error {
 		if err != nil {
 			return err
 		}
+
 		for _, device := range devices {
 			deviceIds = append(deviceIds, device.Id)
 			err = handler.createDevice(device, time.Now())
@@ -62,6 +64,33 @@ func (handler *Handler) FullSync() error {
 			return err
 		}
 		_, ok := slices.BinarySearch(deviceIds, deviceId)
+		if !ok {
+			err = handler.deleteDevice(deviceId)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	rows, err = handler.db.Query("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
+	if err != nil {
+		return err
+	}
+	var tableName string
+	for rows.Next() {
+		err = rows.Scan(&tableName)
+		if err != nil {
+			return err
+		}
+		if !strings.HasPrefix(tableName, "device:") {
+			continue // not a device table, skip
+		}
+		shortDeviceID := tableName[7:29]
+		deviceId, err := models.LongId(shortDeviceID)
+		if err != nil {
+			return err
+		}
+		_, ok := slices.BinarySearch(deviceIds, models.URN_PREFIX+"device:"+deviceId)
 		if !ok {
 			err = handler.deleteDevice(deviceId)
 			if err != nil {
