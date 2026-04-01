@@ -83,6 +83,8 @@ func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handl
 		wg.Done()
 	}()
 
+	db.SetMaxOpenConns(5)
+
 	err = db.Ping()
 	if err != nil {
 		_ = db.Close()
