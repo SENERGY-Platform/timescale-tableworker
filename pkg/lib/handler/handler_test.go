@@ -236,6 +236,14 @@ func TestHandler(t *testing.T) {
 											AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
 											SerializationOptions: []string{models.SerializationOptionXmlAttribute},
 										},
+										{
+											Name:                 "thisisatestforveryveryveryveryveryverylongfieldnameswhichneedtobehashed",
+											Type:                 models.Integer,
+											CharacteristicId:     "urn:infai:ses:characteristic:a49a48fc-3a2c-4149-ac7f-1a5482d4c6e1",
+											FunctionId:           "urn:infai:ses:measuring-function:f2769eb9-b6ad-4f7e-bd28-e4ea043d2f8b",
+											AspectId:             "urn:infai:ses:aspect:a14c5efb-b0b6-46c3-982e-9fded75b5ab6",
+											SerializationOptions: []string{models.SerializationOptionXmlAttribute},
+										},
 									},
 								},
 								{

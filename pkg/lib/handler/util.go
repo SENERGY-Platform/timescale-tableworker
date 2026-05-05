@@ -18,10 +18,12 @@ package handler
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
-	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
 	"sort"
 	"strings"
+
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
 )
 
 func parseContentVariable(c devicetypes.ContentVariable, path string) []fieldDescription {
@@ -31,29 +33,30 @@ func parseContentVariable(c devicetypes.ContentVariable, path string) []fieldDes
 		prefix += "."
 	}
 	prefix += c.Name
+	fieldName := HashFieldNameIfNeeded(prefix)
 	switch c.Type {
 	case devicetypes.String:
 		s = append(s, fieldDescription{
-			ColumnName: "\"" + prefix + "\"",
+			ColumnName: fieldName,
 			Nullable:   true,
 			DataType:   "text",
 		})
 	case devicetypes.Boolean:
 		s = append(s, fieldDescription{
-			ColumnName: "\"" + prefix + "\"",
+			ColumnName: fieldName,
 			Nullable:   true,
 			DataType:   "bool",
 		})
 
 	case devicetypes.Float:
 		s = append(s, fieldDescription{
-			ColumnName: "\"" + prefix + "\"",
+			ColumnName: fieldName,
 			Nullable:   true,
 			DataType:   "double PRECISION",
 		})
 	case devicetypes.Integer:
 		s = append(s, fieldDescription{
-			ColumnName: "\"" + prefix + "\"",
+			ColumnName: fieldName,
 			Nullable:   true,
 			DataType:   "bigint",
 		})
@@ -67,7 +70,7 @@ func parseContentVariable(c devicetypes.ContentVariable, path string) []fieldDes
 	case devicetypes.List:
 		if len(c.SubContentVariables) > 0 && c.SubContentVariables[0].Name == "*" {
 			s = append(s, fieldDescription{
-				ColumnName: "\"" + prefix + "\"",
+				ColumnName: fieldName,
 				Nullable:   true,
 				DataType:   "JSONB",
 			})
@@ -78,6 +81,15 @@ func parseContentVariable(c devicetypes.ContentVariable, path string) []fieldDes
 		}
 	}
 	return s
+}
+
+func HashFieldNameIfNeeded(name string) string {
+	if len(name) > 63 {
+		sum := sha256.Sum256([]byte(name)) // 32 bytes
+		truncated := sum[:31]              // 31 bytes -> 62 hex chars
+		return "\"" + hex.EncodeToString(truncated) + "\""
+	}
+	return "\"" + name + "\""
 }
 
 func hashServiceOutputs(c devicetypes.Service) string {
