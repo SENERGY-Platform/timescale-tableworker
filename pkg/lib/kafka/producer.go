@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/config"
-	"github.com/Shopify/sarama"
 )
 
 type Producer struct {

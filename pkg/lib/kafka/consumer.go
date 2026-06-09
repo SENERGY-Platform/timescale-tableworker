@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/IBM/sarama"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/util"
-	"github.com/Shopify/sarama"
 )
 
 func NewConsumer(ctx context.Context, wg *sync.WaitGroup, kafkaBootstrap string, topics []string, groupId string, listener func(topic string, msg []byte, time time.Time) error, errorhandler func(err error, consumer *Consumer), debug bool) (consumer *Consumer, needsSync bool, err error) {
