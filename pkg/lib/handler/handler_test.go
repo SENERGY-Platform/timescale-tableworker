@@ -102,7 +102,7 @@ func TestHandler(t *testing.T) {
 	testDtPut := func(t *testing.T, dt models.DeviceType, currentTime time.Time) models.DeviceType {
 		timeout, _ := context.WithTimeout(context.Background(), 3*time.Second)
 		t.Run("device-repo", func(t *testing.T) {
-			err = deviceRepoDb.SetDeviceType(timeout, dt)
+			err = deviceRepoDb.SetDeviceType(timeout, dt, nil)
 			if err != nil {
 				t.Error(err)
 				return
@@ -132,7 +132,7 @@ func TestHandler(t *testing.T) {
 		d.GenerateId()
 		timeout, _ := context.WithTimeout(context.Background(), 3*time.Second)
 		t.Run("device-repo", func(t *testing.T) {
-			err = deviceRepoDb.SetDevice(timeout, client.DeviceWithConnectionState{Device: d})
+			err = deviceRepoDb.SetDevice(timeout, client.DeviceWithConnectionState{Device: d}, nil)
 			if err != nil {
 				t.Error(err)
 				return
