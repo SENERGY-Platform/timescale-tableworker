@@ -292,9 +292,14 @@ func (handler *Handler) getKnownServiceMeta(serviceId string) (hash string, t ti
 	if err != nil {
 		return
 	}
+	defer res.Close()
 	if res.Next() {
 		err = res.Scan(&hash, &t)
+		if err != nil {
+			return
+		}
 	}
+	err = res.Err()
 	return
 }
 
@@ -305,13 +310,7 @@ func (handler *Handler) upsertServiceMeta(serviceId string, hash string, t time.
 		"ON CONFLICT ON CONSTRAINT \"" + tableServiceHashes + "_pkey\" DO UPDATE SET \"" + fieldHash + "\" = '" + hash + "', \"" + fieldTime + "\" = '" + t.Format(time.RFC3339Nano) +
 		"' WHERE \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableServiceHashes + "\".\"" + fieldServiceId + "\" = '" + serviceId + "';"
 	util.Logger.Debug(query)
-	res, err := handler.db.Query(query)
-	if err != nil {
-		return
-	}
-	if res.Next() {
-		err = res.Scan(&hash, &t)
-	}
+	_, err = handler.db.Exec(query)
 	return
 }
 
@@ -323,6 +322,7 @@ func (handler *Handler) getOutdatedDeviceIds(deviceTypeId string, t time.Time) (
 	if err != nil {
 		return
 	}
+	defer res.Close()
 	var deviceId string
 	for res.Next() {
 		err = res.Scan(&deviceId)
@@ -331,6 +331,7 @@ func (handler *Handler) getOutdatedDeviceIds(deviceTypeId string, t time.Time) (
 		}
 		deviceIds = append(deviceIds, deviceId)
 	}
+	err = res.Err()
 	return
 }
 
@@ -344,6 +345,7 @@ func (handler *Handler) forEachCAofHypertable(table string, tx *sql.Tx, f forEac
 		_ = tx.Rollback()
 		return errors.Join(errors.New("could not execute query "+query), err)
 	}
+	defer res.Close()
 	viewSchemas, viewNames, viewDefinitions := []string{}, []string{}, []string{}
 	materializedOnlys := []bool{}
 	for res.Next() {
@@ -357,6 +359,15 @@ func (handler *Handler) forEachCAofHypertable(table string, tx *sql.Tx, f forEac
 		viewNames = append(viewNames, viewName)
 		viewDefinitions = append(viewDefinitions, viewDefinition)
 		materializedOnlys = append(materializedOnlys, materializedOnly)
+	}
+	err = res.Err()
+	if err != nil {
+		return errors.Join(errors.New("could not read view information"), err)
+	}
+	// the result set has to be closed before f may use the same transaction
+	err = res.Close()
+	if err != nil {
+		return errors.Join(errors.New("could not close view information result"), err)
 	}
 	for i := range viewSchemas {
 		err = f(table, viewSchemas[i], viewNames[i], viewDefinitions[i], materializedOnlys[i])
@@ -376,6 +387,7 @@ func (handler *Handler) forEachStoredBackup(deviceId string, tx *sql.Tx, f forEa
 		_ = tx.Rollback()
 		return errors.Join(errors.New("could not execute query "+query), err)
 	}
+	defer res.Close()
 	viewSchemas, viewNames, viewDefinitions, backupTables := []string{}, []string{}, []string{}, []string{}
 	materializedOnlys := []bool{}
 	for res.Next() {
@@ -396,6 +408,15 @@ func (handler *Handler) forEachStoredBackup(deviceId string, tx *sql.Tx, f forEa
 		viewDefinitions = append(viewDefinitions, viewDefinition)
 		materializedOnlys = append(materializedOnlys, materializedOnly)
 		backupTables = append(backupTables, backupTable)
+	}
+	err = res.Err()
+	if err != nil {
+		return errors.Join(errors.New("could not read backup information"), err)
+	}
+	// the result set has to be closed before f may use the same transaction
+	err = res.Close()
+	if err != nil {
+		return errors.Join(errors.New("could not close backup information result"), err)
 	}
 	for i := range viewSchemas {
 		err = f(backupTables[i], viewSchemas[i], viewNames[i], viewDefinitions[i], materializedOnlys[i])
@@ -490,7 +511,7 @@ func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fiel
 	}
 	query = fmt.Sprintf("ALTER TABLE \"%s\" ALTER COLUMN %s TYPE %s;", table, nt.ColumnName, nt.DataType)
 	util.Logger.Debug(query)
-	_, err = tx.Query(query)
+	_, err = tx.Exec(query)
 	if err != nil {
 		pqErr, ok := err.(*pq.Error)
 		if ok && pqErr.Code == "0A000" && pqErr.Message == "cannot alter type of a column used by a view or rule" {

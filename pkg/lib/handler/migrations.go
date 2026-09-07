@@ -28,22 +28,15 @@ func (handler *Handler) migrate() error {
 }
 
 func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
-	i := 0
-	rows, err := handler.db.Query("SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time' AND data_type = 'timestamp without time zone' AND (table_name ~ '^userid:.{22}_export:.{22}$' OR table_name ~ '^device:.{22}_service:.{22}$');")
+	// the result set is read completely before the first transaction is opened, so that it does not
+	// hold a connection for the whole migration
+	tables, err := handler.queryStrings("SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'time' AND data_type = 'timestamp without time zone' AND (table_name ~ '^userid:.{22}_export:.{22}$' OR table_name ~ '^device:.{22}_service:.{22}$');")
 	if err != nil {
 		return err
 	}
-	for rows.Next() {
-		i++
+	for _, table := range tables {
 		tx, err := handler.db.BeginTx(handler.ctx, &sql.TxOptions{})
 		if err != nil {
-			tx.Rollback()
-			return err
-		}
-		table := ""
-		err = rows.Scan(&table)
-		if err != nil {
-			tx.Rollback()
 			return err
 		}
 		util.Logger.Debug("Migrating " + table)
@@ -53,7 +46,7 @@ func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
 			DataType:   "TIMESTAMPTZ",
 		}, handler.ctx, table)
 		if err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			return err
 		}
 		err = tx.Commit()
@@ -61,10 +54,6 @@ func (handler *Handler) migrateTIMESTAMP_TIMESTAMPTZ() error {
 			return err
 		}
 	}
-	err = rows.Err()
-	if err != nil {
-		return err
-	}
-	util.Logger.Debug("Finished TIMESTAMPTZ migration, ran for " + strconv.Itoa(i) + " tables")
+	util.Logger.Debug("Finished TIMESTAMPTZ migration, ran for " + strconv.Itoa(len(tables)) + " tables")
 	return nil
 }

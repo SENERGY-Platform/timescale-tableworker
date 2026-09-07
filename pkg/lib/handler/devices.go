@@ -226,28 +226,23 @@ func (handler *Handler) deleteDevice(deviceId string) error {
 
 func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string) (tables []string, err error) {
 	ctx, cancel := context.WithTimeout(handler.ctx, timeout)
-	tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
-	if err != nil {
-		cancel()
-		return tables, err
-	}
+	defer cancel()
+
 	query := "SELECT table_name, table_type FROM information_schema.tables WHERE table_name like 'device:" + shortDeviceId + "_service:" + shortServiceId + "';"
 	util.Logger.Debug(query)
 
-	res, err := handler.db.Query(query)
+	res, err := handler.db.QueryContext(ctx, query)
 	if err != nil {
-		_ = tx.Rollback()
-		cancel()
 		return tables, err
 	}
 	tables = []string{}
+	tableTypes := []string{}
 	for res.Next() {
 		var table []byte
 		var tableType string
 		err = res.Scan(&table, &tableType)
 		if err != nil {
-			_ = tx.Rollback()
-			cancel()
+			_ = res.Close()
 			return tables, err
 		}
 		tables = append(tables, string(table))
@@ -257,28 +252,34 @@ func (handler *Handler) deleteTables(shortDeviceId string, shortServiceId string
 		case "VIEW":
 			tableType = "MATERIALIZED VIEW"
 		}
-
-		query := fmt.Sprintf("DROP %s IF EXISTS \"%s\" CASCADE", tableType, string(table))
-		util.Logger.Debug(query)
-
-		_, err := tx.Exec(query)
-		if err != nil {
-			if err != nil {
-				_ = tx.Rollback()
-				cancel()
-				return tables, err
-			}
-		}
+		tableTypes = append(tableTypes, tableType)
 	}
 	err = res.Err()
 	if err != nil {
-		_ = tx.Rollback()
-		cancel()
+		_ = res.Close()
 		return tables, err
 	}
-	err = tx.Commit()
-	cancel()
-	return tables, err
+	// the result set has to be closed before the transaction may take a connection of its own
+	err = res.Close()
+	if err != nil {
+		return tables, err
+	}
+
+	tx, err := handler.db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		return tables, err
+	}
+	for i, table := range tables {
+		query := fmt.Sprintf("DROP %s IF EXISTS \"%s\" CASCADE", tableTypes[i], table)
+		util.Logger.Debug(query)
+
+		_, err = tx.Exec(query)
+		if err != nil {
+			_ = tx.Rollback()
+			return tables, err
+		}
+	}
+	return tables, tx.Commit()
 }
 
 func getFieldDescriptionsOfTable(table string, tx *sql.Tx) ([]fieldDescription, error) {
@@ -287,6 +288,7 @@ func getFieldDescriptionsOfTable(table string, tx *sql.Tx) ([]fieldDescription, 
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		fd := fieldDescription{}
 		no := ""
@@ -299,6 +301,10 @@ func getFieldDescriptionsOfTable(table string, tx *sql.Tx) ([]fieldDescription, 
 			fd.Nullable = true
 		}
 		res = append(res, fd)
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, err
 	}
 	return res, nil
 }

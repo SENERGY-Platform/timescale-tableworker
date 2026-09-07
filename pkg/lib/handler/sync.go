@@ -53,16 +53,13 @@ func (handler *Handler) FullSync() error {
 	slices.Sort(deviceIds) // enables binary search
 
 	// ensure deleted devices are deleted in db as well
-	rows, err := handler.db.Query("SELECT DISTINCT device_id FROM \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableDeviceTypeDevices + "\"")
+	// the result sets are read completely before any device is deleted, so that they do not
+	// hold a connection while deleteDevice needs one of its own
+	knownDeviceIds, err := handler.queryStrings("SELECT DISTINCT device_id FROM \"" + handler.conf.PostgresTableworkerSchema + "\".\"" + tableDeviceTypeDevices + "\"")
 	if err != nil {
 		return err
 	}
-	var deviceId string
-	for rows.Next() {
-		err = rows.Scan(&deviceId)
-		if err != nil {
-			return err
-		}
+	for _, deviceId := range knownDeviceIds {
 		_, ok := slices.BinarySearch(deviceIds, deviceId)
 		if !ok {
 			err = handler.deleteDevice(deviceId)
@@ -72,16 +69,11 @@ func (handler *Handler) FullSync() error {
 		}
 	}
 
-	rows, err = handler.db.Query("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
+	tableNames, err := handler.queryStrings("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
 	if err != nil {
 		return err
 	}
-	var tableName string
-	for rows.Next() {
-		err = rows.Scan(&tableName)
-		if err != nil {
-			return err
-		}
+	for _, tableName := range tableNames {
 		if !strings.HasPrefix(tableName, "device:") {
 			continue // not a device table, skip
 		}
@@ -117,4 +109,26 @@ func (handler *Handler) FullSync() error {
 	}
 
 	return nil
+}
+
+// queryStrings reads a single-column result set completely and releases the connection before returning
+func (handler *Handler) queryStrings(query string) (values []string, err error) {
+	rows, err := handler.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var value string
+		err = rows.Scan(&value)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, value)
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+	return values, rows.Close()
 }
