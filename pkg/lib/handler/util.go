@@ -18,11 +18,11 @@ package handler
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
 
+	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/columnnames"
 	"github.com/SENERGY-Platform/timescale-tableworker/pkg/lib/devicetypes"
 )
 
@@ -83,13 +83,12 @@ func parseContentVariable(c devicetypes.ContentVariable, path string) []fieldDes
 	return s
 }
 
+// HashFieldNameIfNeeded delegates to pkg/lib/columnnames.HashFieldNameIfNeeded, which is kept as
+// a leaf package (standard library only) so that other services can compute the same column names
+// without pulling in this package's device-type and database dependencies. See that package's doc
+// comment for details.
 func HashFieldNameIfNeeded(name string) string {
-	if len(name) > 63 {
-		sum := sha256.Sum256([]byte(name)) // 32 bytes
-		truncated := sum[:31]              // 31 bytes -> 62 hex chars
-		return "\"" + hex.EncodeToString(truncated) + "\""
-	}
-	return "\"" + name + "\""
+	return columnnames.HashFieldNameIfNeeded(name)
 }
 
 func hashServiceOutputs(c devicetypes.Service) string {
