@@ -188,6 +188,15 @@ func (handler *Handler) handleDeviceTypeUpdate(dt devicetypes.DeviceType, t time
 						return errors.Join(fmt.Errorf("could not backup CAs for table %s", table), err)
 					}
 
+					if len(newType) > 0 {
+						// ALTER COLUMN TYPE is not supported while chunks are compressed. The columnstore policy compresses again later.
+						err = handler.decompressAll(tx, table)
+						if err != nil {
+							_ = tx.Rollback()
+							return errors.Join(baseError, err)
+						}
+					}
+
 					query := fmt.Sprintf("ALTER TABLE \"%s\"", table)
 					for _, add := range added {
 						query += fmt.Sprintf(" ADD COLUMN %s,", add.String())
@@ -501,10 +510,16 @@ func (handler *Handler) insertBackupDataAndDrop(viewSchema, viewName, backupTabl
 }
 
 func (handler *Handler) handleColumnTypeChange(tx *sql.Tx, table string, nt fieldDescription, ctx context.Context, identifier string) (*sql.Tx, error) {
+	// decompress before the savepoint: the error path below rolls back to the savepoint, which would undo a later decompression
+	err := handler.decompressAll(tx, table)
+	if err != nil {
+		_ = tx.Rollback()
+		return tx, err
+	}
 	savepoint := "\"" + uuid.NewString() + "\""
 	query := "SAVEPOINT " + savepoint + ";"
 	util.Logger.Debug(query)
-	_, err := tx.Exec(query)
+	_, err = tx.Exec(query)
 	if err != nil {
 		_ = tx.Rollback()
 		return tx, err

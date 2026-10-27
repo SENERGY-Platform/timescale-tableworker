@@ -172,6 +172,24 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 			return table, err
 		}
 	}
+	if handler.conf.ColumnstoreAfter != "" && !handler.distributed {
+		tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
+		if err != nil {
+			cancel()
+			return table, err
+		}
+		err = handler.enableColumnstore(tx, table, nil)
+		if err != nil {
+			_ = tx.Rollback()
+			cancel()
+			return table, err
+		}
+		err = tx.Commit()
+		if err != nil {
+			cancel()
+			return table, err
+		}
+	}
 	tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})
 	if err != nil {
 		cancel()

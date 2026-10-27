@@ -52,6 +52,9 @@ type Config struct {
 
 	SyncOnStartup bool `json:"SyncOnStartup"`
 
+	// ColumnstoreAfter is a PostgreSQL interval (e.g. "14 days"). Device tables get a columnstore policy compressing chunks older than this. Empty disables the feature.
+	ColumnstoreAfter string `json:"ColumnstoreAfter"`
+
 	Debug bool
 }
 

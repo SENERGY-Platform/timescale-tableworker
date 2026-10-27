@@ -91,6 +91,15 @@ func NewHandler(c config.Config, wg *sync.WaitGroup, ctx context.Context) (handl
 		return nil, err
 	}
 
+	if c.ColumnstoreAfter != "" {
+		var interval string
+		err = db.QueryRow("SELECT $1::interval::text", c.ColumnstoreAfter).Scan(&interval)
+		if err != nil {
+			_ = db.Close()
+			return nil, errors.Join(errors.New("invalid ColumnstoreAfter: "+c.ColumnstoreAfter), err)
+		}
+	}
+
 	producer, err := kafka.NewProducer(c, ctx, wg)
 	if err != nil {
 		return nil, err
