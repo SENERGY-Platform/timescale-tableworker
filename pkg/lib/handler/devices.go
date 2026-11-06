@@ -153,24 +153,20 @@ func (handler *Handler) createDeviceServiceTable(shortDeviceId string, service d
 	if handler.distributed {
 		query += "distributed_"
 	}
-	query += "hypertable('\"" + table + "\"','time');"
+	// every device PUT runs this again; if_not_exists turns the repeat into a NOTICE instead of an ERROR in the Postgres log
+	query += "hypertable('\"" + table + "\"','time', if_not_exists => true);"
 	util.Logger.Debug(query)
 
 	_, err = tx.Exec(query)
 	if err != nil {
 		_ = tx.Rollback()
-		if err.Error() == "pq: table \""+table+"\" is already a hypertable" {
-			util.Logger.Debug(err.Error())
-		} else {
-			cancel()
-			return table, err
-		}
-	} else {
-		err = tx.Commit()
-		if err != nil {
-			cancel()
-			return table, err
-		}
+		cancel()
+		return table, err
+	}
+	err = tx.Commit()
+	if err != nil {
+		cancel()
+		return table, err
 	}
 	if handler.conf.ColumnstoreAfter != "" && !handler.distributed {
 		tx, err = handler.db.BeginTx(ctx, &sql.TxOptions{})

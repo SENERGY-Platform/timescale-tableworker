@@ -875,6 +875,18 @@ func TestHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("repeated device put", func(t *testing.T) {
+		withColumnstore(t, columnstoreAfterTest)
+		dt, deviceId, table := csSetup(t, csVar("v", models.Integer))
+		// the table is already a hypertable now; a second PUT must not fail on create_hypertable
+		if err := handler.createDevice(models.Device{Id: deviceId, DeviceTypeId: dt.Id}, now.Add(3*time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		if n := csInt(t, "SELECT count(*) FROM timescaledb_information.hypertables WHERE hypertable_schema = 'public' AND hypertable_name = $1;", table); n != 1 {
+			t.Fatalf("expected the table to stay a hypertable, got %d", n)
+		}
+	})
+
 	t.Run("columnstore migration", func(t *testing.T) {
 		withColumnstore(t, "")
 		for i := 0; i < 3; i++ {
